@@ -252,14 +252,18 @@ What remains unbounded is everything below 6 bits: nothing here establishes
 where the redundancy stops, only that it is intact at 8, weakening at 6, and
 unmeasurable by this metric at 4.
 
-### 20. The held-out slice is 32 sequences, not the budget `configs/quant.yaml` states
-`configs/quant.yaml` declares `eval_tokens: 262144` and
-`calibration_tokens: 65536`. Every cell actually run used **8192 held-out
-tokens and 2048 tokens per calibration draw** — the committed corpus is ~300k
-tokens and the configured layout needs ~590k for five disjoint draws, so the
-config's budget was never achievable against it. `build_slices` refuses the
-short layout rather than silently recycling tokens across draws, so this shows
-up as an error, not as a quiet overlap.
+### 20. The held-out slice is 32 sequences
+Every cell was measured with **8192 held-out tokens and 2048 tokens per
+calibration draw**. The plan asked for 262144 and 65536, which the committed
+corpus cannot supply: five *disjoint* draws plus the holdout need ~590k tokens
+against its ~264k. `build_slices` refuses the short layout rather than silently
+recycling tokens across draws, so this shows up as an error, not as a quiet
+overlap.
+
+`configs/quant.yaml` now states the budget that was actually used, so the
+defaults reproduce the published grid; the plan's original figures are kept
+there in comments. Until 2026-08-25 it declared the unachievable ones, which
+meant the config and the results had never agreed.
 
 The consequence is on the intervals, not the point estimates: the held-out
 slice is **32 sequences of 256 tokens**, and every CI in this repo is a

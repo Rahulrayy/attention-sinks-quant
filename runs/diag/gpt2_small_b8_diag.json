@@ -1,0 +1,88 @@
+{
+  "model": "gpt2_small",
+  "bits": 8,
+  "ppl_ref": 29.42392783253628,
+  "seq_len": 256,
+  "calib_tokens": 2048,
+  "eval_tokens": 8192,
+  "calib_seed": 0,
+  "corpus": "C:\\Users\\rahul\\OneDrive\\Desktop\\LEIDEN SEM 2\\PERSONAL\\attention\\data\\fineweb_edu.txt",
+  "corpus_sha256": "9c8501c905092716",
+  "arms": [
+    {
+      "arm": "w_only",
+      "n_patched": 48,
+      "n_calibrated": 0,
+      "ppl_quant": 29.354671375060022,
+      "delta_ppl": -0.06925645747625708
+    },
+    {
+      "arm": "a_only_static",
+      "n_patched": 48,
+      "n_calibrated": 48,
+      "ppl_quant": 38.8992848142041,
+      "delta_ppl": 9.475356981667822
+    },
+    {
+      "arm": "a_only_dynamic",
+      "n_patched": 48,
+      "n_calibrated": 0,
+      "ppl_quant": 35.83057654147796,
+      "delta_ppl": 6.406648708941681
+    },
+    {
+      "arm": "a_only_per_token",
+      "n_patched": 48,
+      "n_calibrated": 0,
+      "ppl_quant": 29.523941674941995,
+      "delta_ppl": 0.10001384240571554
+    },
+    {
+      "arm": "full_static",
+      "n_patched": 48,
+      "n_calibrated": 48,
+      "ppl_quant": 38.86116937285819,
+      "delta_ppl": 9.437241540321914
+    }
+  ],
+  "coverage": {
+    "n_layers": 48,
+    "n_clipped": 36,
+    "max_ratio": 1.6326530612244898,
+    "median_ratio": 1.0134228187919463,
+    "worst_layers": [
+      {
+        "layer": "transformer.h.10.mlp.c_proj",
+        "holdout_over_calib": 1.6326530612244898
+      },
+      {
+        "layer": "transformer.h.9.attn.c_proj",
+        "holdout_over_calib": 1.3092369477911647
+      },
+      {
+        "layer": "transformer.h.10.attn.c_proj",
+        "holdout_over_calib": 1.221476510067114
+      },
+      {
+        "layer": "transformer.h.6.mlp.c_proj",
+        "holdout_over_calib": 1.218543046357616
+      },
+      {
+        "layer": "transformer.h.5.attn.c_proj",
+        "holdout_over_calib": 1.1285714285714286
+      },
+      {
+        "layer": "transformer.h.5.mlp.c_proj",
+        "holdout_over_calib": 1.1275167785234899
+      },
+      {
+        "layer": "transformer.h.8.attn.c_proj",
+        "holdout_over_calib": 1.1272727272727272
+      },
+      {
+        "layer": "transformer.h.7.mlp.c_proj",
+        "holdout_over_calib": 1.1130952380952381
+      }
+    ]
+  }
+}

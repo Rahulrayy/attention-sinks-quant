@@ -1,0 +1,30 @@
+arch:
+  n_layer: 6
+  n_head: 6
+  d_model: 384
+  block_size: 512
+  vocab_size: 16384                        # own BPE — trap §9.6, keeps the
+                                           # transformer the majority of params
+  attention: softmax                       # {softmax, softmax1, gated}
+  use_naive_attention: true                # ALL arms incl. baseline — trap §9.5.
+                                           # Consequence: wall-clock comparisons
+                                           # between arms are MEANINGLESS.
+
+optim:
+  batch_size: 16
+  grad_accum: 2
+  lr: 6.0e-4
+  warmup_steps: 200
+  max_steps: 12000
+  weight_decay: 0.1
+  grad_clip: 1.0
+
+data:
+  dataset: fineweb-edu
+  tokens: 100_000_000
+  streaming: true                          # non-streaming eats 16 GB RAM
+
+run:
+  seeds: [0, 1, 2, 3, 4]
+  ckpt_every: 500
+  log_gpu_telemetry: true                  # temp + clock — overnight thermal risk

@@ -1,0 +1,24 @@
+# runs/ is gitignored EXCEPT the committed results: the summary CSVs, the
+# figures the README embeds (a gitignored figure is a broken image on GitHub),
+# and the diagnostic JSONs that a headline claim in README §5.4 rests on.
+runs/*
+!runs/results/
+runs/results/*
+!runs/results/*.csv
+!runs/results/*.png
+!runs/diag/
+runs/diag/*
+!runs/diag/*.json
+
+# data/ IS committed. The corpus swap moved the headline by ~5x, so the exact
+# document set is part of the result, not an input that can be regenerated.
+# See data/README.md and LIMITATIONS.md §18.
+
+.venv/
+.idea/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.bin
+*.safetensors
+*.memmap

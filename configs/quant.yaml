@@ -1,0 +1,31 @@
+# Fake quantization grid. Simulated rounding error in fp16 — NOT int8 kernels.
+# See LIMITATIONS.md §3.
+
+bits: [8, 6, 4]
+
+weight_granularity: [per_channel]          # control: ~lossless at 8b
+
+act_granularity:
+  - per_tensor                             # where the classic 2023 effect lives
+  - per_token                              # the modern baseline — MUST be run;
+                                           # this axis IS the research question
+
+fp16_exceptions:
+  - none                                   # full damage
+  - position_0                             # KVQuant-style control, not a contribution
+  - detected_sinks                         # magnitude-based, multi-level (detector.yaml)
+  - outlier_channels                       # LLM.int8-style, top-k by max|x|
+
+# The budget every committed cell was actually measured with. The original plan
+# asked for 65536 / 262144, which the committed corpus cannot supply: five
+# DISJOINT draws plus the holdout would need ~590k tokens against its ~264k, and
+# build_slices refuses the short layout rather than recycling tokens across
+# draws. Stating the achievable numbers here means the defaults reproduce the
+# published grid instead of failing. See LIMITATIONS.md §20.
+calibration_tokens: 2048                   # plan asked for 65536
+calibration_seeds: [0, 1, 2, 3, 4]         # disjoint draws = Track-A "seeds"
+eval_tokens: 8192                          # plan asked for 262144; = 32 seqs at 256
+
+eval:
+  ppl_slice: held_out                      # fixed; NEVER touched during calibration
+  downstream: [lambada]                    # ~10 min/config ceiling

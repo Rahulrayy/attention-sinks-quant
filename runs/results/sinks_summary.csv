@@ -1,0 +1,6 @@
+model,seed,prepend_bos,mean_sink_mass,max_head_sink_mass,frac_heads_sinking,sink_free,max_layer_relative,n_valid_taus,sink_positions,source
+gated_1b_baseline,0,False,0.3847768306732178,0.9375,0.36160714285714285,False,352.0,5,[0],gated_1b_baseline_calib0_nobos.json
+gated_1b_elementwise,0,False,0.020738108083605766,0.31884765625,0.0,True,4.431924882629108,0,[],gated_1b_elementwise_calib0_nobos.json
+gated_1b_headwise,0,False,0.054209139198064804,0.5517578125,0.002232142857142857,True,3.848101265822785,0,[],gated_1b_headwise_calib0_nobos.json
+gpt2_small,0,False,0.3402814269065857,0.8818359375,0.24305555555555555,False,87.78761061946902,5,[0],gpt2_small_calib0_nobos.json
+qwen3_0.6b_base,0,False,0.4726572632789612,0.970703125,0.47544642857142855,False,1198.1855670103093,5,[0],qwen3_0.6b_base_calib0_nobos.json

@@ -1,0 +1,11 @@
+# The corpora under data/ are DATA, not source. Their exact bytes are part of
+# the experiment: data/README.md records a sha256 for each, and the token
+# stream a model sees depends on them. Git's autocrlf would rewrite line
+# endings on checkout, so a fresh clone would hash differently and tokenize
+# differently from the files these results were measured on.
+#
+# -text disables all line-ending conversion for them. Do not remove this.
+data/*.txt -text
+
+# Figures are binary; diffing them is noise.
+*.png binary

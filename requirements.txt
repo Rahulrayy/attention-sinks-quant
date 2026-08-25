@@ -1,0 +1,25 @@
+# Python 3.11. Install torch first, matched to your CUDA build:
+#   pip install torch --index-url https://download.pytorch.org/whl/cu126
+torch>=2.4
+
+# NOTE: the QwQZh/gated_attention checkpoints bundle their own
+# modeling_qwen3.py pinned at transformers 4.46.0 and require
+# trust_remote_code=True. If a newer transformers breaks that bundled code,
+# pin here rather than editing the vendored file.
+transformers>=4.46,<5
+tokenizers>=0.20
+datasets>=3.0
+safetensors>=0.4
+accelerate>=1.0
+
+numpy>=1.26
+pandas>=2.2
+scipy>=1.14
+matplotlib>=3.9
+pyyaml>=6.0
+
+pytest>=8.0
+
+# Deliberately absent: hydra, wandb, mlflow, any experiment tracker.
+# YAML + argparse overrides is enough at this scale (design rule §7.4).
+# Also absent: bitsandbytes. This is fake quant, not int8 kernels.

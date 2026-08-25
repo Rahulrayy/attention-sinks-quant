@@ -1,0 +1,88 @@
+{
+  "model": "qwen3_0.6b_base",
+  "bits": 8,
+  "ppl_ref": 17.880791432882745,
+  "seq_len": 256,
+  "calib_tokens": 2048,
+  "eval_tokens": 8192,
+  "calib_seed": 0,
+  "corpus": "C:\\Users\\rahul\\OneDrive\\Desktop\\LEIDEN SEM 2\\PERSONAL\\attention\\data\\fineweb_edu.txt",
+  "corpus_sha256": "9c8501c905092716",
+  "arms": [
+    {
+      "arm": "w_only",
+      "n_patched": 196,
+      "n_calibrated": 0,
+      "ppl_quant": 18.118154121377344,
+      "delta_ppl": 0.23736268849459918
+    },
+    {
+      "arm": "a_only_static",
+      "n_patched": 196,
+      "n_calibrated": 196,
+      "ppl_quant": 32.18275850645819,
+      "delta_ppl": 14.301967073575447
+    },
+    {
+      "arm": "a_only_dynamic",
+      "n_patched": 196,
+      "n_calibrated": 0,
+      "ppl_quant": 27.545274589247754,
+      "delta_ppl": 9.664483156365009
+    },
+    {
+      "arm": "a_only_per_token",
+      "n_patched": 196,
+      "n_calibrated": 0,
+      "ppl_quant": 18.44474181064577,
+      "delta_ppl": 0.5639503777630246
+    },
+    {
+      "arm": "full_static",
+      "n_patched": 196,
+      "n_calibrated": 196,
+      "ppl_quant": 31.87760510884785,
+      "delta_ppl": 13.996813675965104
+    }
+  ],
+  "coverage": {
+    "n_layers": 196,
+    "n_clipped": 170,
+    "max_ratio": 1.6507936507936507,
+    "median_ratio": 1.0379746835443038,
+    "worst_layers": [
+      {
+        "layer": "model.layers.7.self_attn.o_proj",
+        "holdout_over_calib": 1.6507936507936507
+      },
+      {
+        "layer": "model.layers.14.mlp.down_proj",
+        "holdout_over_calib": 1.4361702127659575
+      },
+      {
+        "layer": "model.layers.1.mlp.down_proj",
+        "holdout_over_calib": 1.411764705882353
+      },
+      {
+        "layer": "model.layers.10.mlp.down_proj",
+        "holdout_over_calib": 1.3212435233160622
+      },
+      {
+        "layer": "model.layers.20.self_attn.o_proj",
+        "holdout_over_calib": 1.3109756097560976
+      },
+      {
+        "layer": "model.layers.18.self_attn.o_proj",
+        "holdout_over_calib": 1.2946859903381642
+      },
+      {
+        "layer": "model.layers.9.mlp.down_proj",
+        "holdout_over_calib": 1.2628865979381443
+      },
+      {
+        "layer": "model.layers.17.mlp.down_proj",
+        "holdout_over_calib": 1.2553191489361701
+      }
+    ]
+  }
+}

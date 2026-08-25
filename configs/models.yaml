@@ -1,0 +1,85 @@
+# Track-A checkpoints. Every entry has one job; nothing here is "for completeness".
+#
+# VERIFIED 2026-08-20 against the HF repo (plan §3 Day-0 gate):
+#   QwQZh/gated_attention ships THREE 1B arms, not two, all sharing one
+#   modeling file and differing only by a config flag. See notes below.
+
+defaults:
+  dtype: bfloat16
+  device: cuda
+  batch_size: 1              # trap §9.2 — B=1 for ALL Track-A measurement
+  seq_len: 1024
+
+models:
+
+  # ---- The controlled triple -------------------------------------------
+  # Same lab, same data pipeline, same tokenizer, same modeling code.
+  # Differ ONLY by {elementwise,headwise}_attn_output_gate in config.json.
+  # This is the cleanest architectural contrast available in public weights.
+
+  - id: gated_1b_baseline
+    hf_repo: QwQZh/gated_attention
+    subfolder: 1B_baseline
+    trust_remote_code: true    # bundled modeling_qwen3.py, NOT stock transformers
+    job: "Control arm of the triple."
+    arch:
+      family: qwen3
+      hidden_size: 2048
+      n_layer: 28
+      n_head: 16
+      n_kv_head: 8             # GQA 2:1 — see gqa_reporting below
+      vocab_size: 152064
+      tie_word_embeddings: true
+      qk_norm: true
+      gate: none
+    prepend_bos: [true, false] # trap §9.4 — run both ways
+
+  - id: gated_1b_headwise
+    hf_repo: QwQZh/gated_attention
+    subfolder: 1B_gate_headwise
+    trust_remote_code: true
+    job: "Treatment arm, coarse gate. Middle of the dose-response axis."
+    arch: { family: qwen3, hidden_size: 2048, n_layer: 28, n_head: 16,
+            n_kv_head: 8, vocab_size: 152064, tie_word_embeddings: true,
+            qk_norm: true, gate: headwise }
+    prepend_bos: [true, false]
+
+  - id: gated_1b_elementwise
+    hf_repo: QwQZh/gated_attention
+    subfolder: 1B_gate_elementwise
+    trust_remote_code: true
+    job: "Treatment arm, G1 as published. The paper's best variant."
+    arch: { family: qwen3, hidden_size: 2048, n_layer: 28, n_head: 16,
+            n_kv_head: 8, vocab_size: 152064, tie_word_embeddings: true,
+            qk_norm: true, gate: elementwise }
+    prepend_bos: [true, false]
+
+  # ---- External validity -----------------------------------------------
+
+  - id: qwen3_0.6b_base
+    hf_repo: Qwen/Qwen3-0.6B-Base
+    trust_remote_code: false
+    job: >
+      External validity for the Qwen3 family: a production model trained by a
+      different pipeline than the academic 1B run. NOT "does the pattern hold" —
+      the baseline arm above already answers that for Qwen3-arch.
+    arch: { family: qwen3, n_head: 16, n_kv_head: 8, qk_norm: true, gate: none }
+    # VERIFIED 2026-08-20: tokenizer.bos_token_id is None for this checkpoint.
+    # Plan trap §9.4 assumes "GPT-2 does not prepend BOS; Qwen and Llama do" —
+    # that is FALSE here, so the BOS arm cannot be run at all. Substituting eos
+    # or any other token would silently change what sits at position 0, which is
+    # the exact confound §9.4 exists to prevent. See LIMITATIONS.md §12.
+    prepend_bos: [false]
+
+  - id: gpt2_small
+    hf_repo: gpt2
+    trust_remote_code: false
+    job: >
+      Old-architecture contrast. The ONLY checkpoint here without QK-Norm,
+      which is what makes the QK-Norm models mean anything.
+    arch: { family: gpt2, n_layer: 12, n_head: 12, qk_norm: false, gate: none }
+    prepend_bos: [true, false]   # GPT-2 does not prepend BOS by default
+
+# Report sink mass per QUERY head, aggregating KV groups by broadcast.
+# Decided up front (plan §6) and not revisited. State it in every figure caption.
+gqa_reporting: per_query_head

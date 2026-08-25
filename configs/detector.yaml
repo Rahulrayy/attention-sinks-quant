@@ -1,0 +1,37 @@
+# Magnitude-based multi-level sink detector.
+#
+# The naive position_0 rule is INSUFFICIENT for Qwen models: CushionCache
+# reports three sink levels in QwQ-32B and six in Qwen3-14B. Do not hard-code.
+#
+#   sink(t) = True  iff  M(t) > tau * median_t(M(t))
+#   where   M(t) = max_l max_c |x^(l)_{t,c}|
+
+# EMPIRICAL, 2026-08-20. The plan's grid started at 10 and found nothing above
+# it on GPT-2 small: M(0) = 3012.9 against a median of 212.2, a ratio of only
+# 14.2x. tau=20, 50 and 100 all flagged ZERO tokens on a model whose sink is
+# plainly visible in the attention maps (0.67 mean sink mass by layer 10, every
+# head above 0.5). A grid whose lowest rung is 10 would therefore have reported
+# "no sinks detected" for the one checkpoint in the roster that is supposed to
+# show the effect most clearly.
+#
+# The compression is structural, not a GPT-2 quirk: M(t) maxes over layers
+# BEFORE the median is taken, so the denominator is set by whichever layer has
+# the largest typical activation. That inflates the median and shrinks every
+# ratio. Extending the grid downward is the minimal fix and keeps the detector
+# formula exactly as specified in plan §6.
+#
+# Open question, NOT decided here: whether to normalise per layer before
+# aggregating (closer to how Sun et al. define a massive activation). That
+# changes the detector definition rather than its sweep, so it needs to be a
+# deliberate call recorded in LIMITATIONS.md, not a silent edit.
+tau_sweep: [2, 5, 10, 20, 50, 100]         # report sensitivity across all six
+
+# HARD GATE (plan §11 Day 2): flagged tokens must actually receive elevated
+# attention mass. If they don't, the detector is wrong and every downstream
+# attribution number is meaningless. Fail loudly, do not warn-and-continue.
+validation:
+  require_attention_agreement: true
+  min_position_0_recall: 1.0               # must at minimum recover position 0
+  attention_percentile: 95                 # flagged tokens must sit above this
+
+outlier_channel_threshold: 100             # c flagged if max_t|x_tc| > 100 * median

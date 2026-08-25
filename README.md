@@ -128,7 +128,14 @@ difference between two damaged models. Once both are destroyed, that difference
 stops carrying information about which degrades more gracefully. Any cell whose
 quantized perplexity exceeds **10×** its own reference is flagged `DESTROYED` by
 `analysis.figures.is_destroyed`, hatched in Figure 2, and excluded from ratio
-columns. That threshold is a judgement call, stated rather than tuned.
+columns.
+
+That threshold is a judgement call. The measured ratios cluster with wide empty
+bands — 13 cells at 1.01–2.22×, two borderline at 8.7× and 8.9×, and 15 at
+42.7× and above — and 10× sits inside the gap, with 10× through 20× behaving
+identically. `python -m analysis.report --threshold-sweep` prints the sweep and
+the sorted ratios; `HANDOFF.md` §12 records which conclusions move with it (§5.3
+does not; one sentence in §5.5 does).
 
 ## 5. Results
 
@@ -327,10 +334,17 @@ result is an 8-bit result, and that the margin is thinner at 6.
 
 **Per-tensor quantization does not survive to 6 bits at all.** Four of five
 models are destroyed (Δppl +1200 to +128000). The single exception is
-`1B_headwise` at +112 — degraded by 8×, and the only checkpoint still on the
+`1B_headwise` at +112 — degraded by 8.7×, and the only checkpoint still on the
 board. So the architectural fix does buy something real and large in the low-bit
 per-tensor regime. It buys it in a setting nobody deploys, and the **+0.1%**
 variant is the one that buys it while the **+12%** variant is 1100× worse.
+
+That "single exception" is the one claim in this README sensitive to where the
+destroyed-model line is drawn: head-wise sits at 8.7× against a 10× threshold,
+so a threshold of 5× would flag it too and the sentence would become "no model
+survives". The two-orders-of-magnitude gap to the next-best arm is unaffected
+either way. `python -m analysis.report --threshold-sweep` prints the full
+sensitivity; the reasoning behind 10× is in `HANDOFF.md` §12.
 
 ### 5.6 Negative and null results
 

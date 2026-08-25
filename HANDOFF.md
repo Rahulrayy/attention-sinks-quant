@@ -508,12 +508,65 @@ already implemented and tested.
 
 Decisions a reasonable person might make differently.
 
-**The destroyed-cell threshold.** 10× the reference perplexity. It is a
-judgement call, stated rather than tuned, and it is load-bearing: it is what
-moved the element-wise 8-bit per-tensor cell out of the ranking. At 5× the same
-cells are flagged; at 100× the element-wise cell still flags and nothing else
-changes. The finding is not sensitive to the exact number, but the threshold
-should be argued rather than inherited.
+**The destroyed-cell threshold — the most consequential unforced choice here.**
+
+`analysis.figures.DESTROYED_PPL_RATIO = 10.0`. A cell whose quantized
+perplexity exceeds 10× its own unquantized reference is treated as a destroyed
+model: `D_sink` on it is a difference between two broken models, so it is
+hatched in Figure 2, marked in Figure 1, flagged in every generated table, and
+excluded from ratio columns.
+
+It is load-bearing. It is what moved the element-wise 8-bit per-tensor cell out
+of the ranking, which is the whole of R4.
+
+Check it rather than trusting it — `python -m analysis.report --threshold-sweep`
+prints this table and the sorted ratios behind it:
+
+| threshold | cells flagged (of 30) | changes vs 10× |
+|---|---|---|
+| 2× | 18 | +baseline 8b tensor, +elementwise 6b token, +headwise 6b tensor |
+| 3× | 17 | +elementwise 6b token, +headwise 6b tensor |
+| 5× | 17 | +elementwise 6b token, +headwise 6b tensor |
+| **10×** | **15** | — |
+| 20× | 15 | — |
+| 50× | 14 | −gpt2 6b tensor |
+| 100× | 12 | −gpt2 6b tensor, −qwen3 6b tensor, −gpt2 4b token |
+
+The ratios are not smoothly distributed; they cluster with wide empty bands, and
+that is what makes 10× defensible:
+
+- 13 cells sit at **1.01–2.22** — plainly working models.
+- Two sit at **8.70** (`headwise` 6b per-tensor) and **8.86** (`elementwise` 6b
+  per-token) — genuinely borderline, and the only cells near the line.
+- 15 sit at **42.68 and above**, up to 156807 — plainly destroyed.
+
+10× sits inside the empty band between 8.86 and 42.68, and the whole band
+10×–20× behaves identically. That is the argument for it.
+
+**What does not depend on it.** R4. The element-wise 8-bit per-tensor cell is at
+**257×** and is flagged at every threshold from 3× to 250×. The finding that
+sink mass ranks the roster's worst model first is threshold-independent, and so
+is the R4 ordering table, which is built from Δppl directly rather than from
+flags.
+
+**What does depend on it, and is stated here because it is not obvious.** The
+two borderline cells are both quoted in README §5.5:
+
+- At **5× or lower**, `1B_headwise` 6b per-tensor flags as destroyed, and §5.5's
+  "per-tensor does not survive to 6 bits, the single exception being head-wise
+  at +112" becomes "no model survives". The *direction* — head-wise being the
+  least damaged by two orders of magnitude — is unaffected, but the sentence
+  would have to change.
+- At **5× or lower**, `1B_elementwise` 6b per-token also flags, which would
+  remove its +0.1036 from the R5 table — the largest 6-bit per-token value and
+  part of the evidence that the redundancy weakens.
+- At **50× or higher**, GPT-2 and Qwen3's 6b per-tensor cells stop flagging, and
+  "four of five destroyed at 6-bit per-tensor" shrinks.
+
+An earlier version of this section claimed the flagging was identical at 5× and
+at 100×. It is not, on either side; the claim was written from intuition and the
+sweep contradicts it. That is the same failure this project audits others for,
+which is why the sweep is now a command rather than a sentence.
 
 **The detector definition.** The plan's aggregate detector was replaced with a
 layer-relative one because it validates across a 20× wider τ range. Defensible,

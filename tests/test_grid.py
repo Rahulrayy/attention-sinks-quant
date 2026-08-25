@@ -184,6 +184,37 @@ def test_aggregator_refuses_cells_measured_on_different_slices():
         assert_comparable(mixed)
 
 
+def test_destroyed_threshold_reads_the_none_arm_and_needs_a_reference():
+    """The flag that decides whether a cell may be ranked at all.
+
+    HANDOFF §12 argues for 10x from where the measured ratios cluster. What is
+    pinned here is narrower and permanent: the predicate reads the undefended
+    `none` arm, compares against each cell's OWN reference, and refuses to guess
+    when there is no reference to compare against.
+    """
+    from analysis.figures import DESTROYED_PPL_RATIO, is_destroyed
+
+    def cell(ppl_ref, ppl_quant):
+        return {"ppl_ref": ppl_ref, "ppl_quant": ppl_quant}
+
+    cells = {
+        ("m", 8, "per_tensor", "none", 0): cell(14.5, 3721.9),   # 257x
+        ("m", 8, "per_token", "none", 0): cell(14.5, 15.2),      # 1.05x
+        ("n", 8, "per_tensor", "none", 0): cell(0.0, 100.0),     # no reference
+    }
+    assert is_destroyed(cells, "m", 8, "per_tensor")
+    assert not is_destroyed(cells, "m", 8, "per_token")
+
+    # A ratio is only meaningful against the cell's own reference: 3721.9 is
+    # destruction at ppl_ref 14.5 and untouched at ppl_ref 3700.
+    near = {("m", 8, "per_tensor", "none", 0): cell(3700.0, 3721.9)}
+    assert not is_destroyed(near, "m", 8, "per_tensor")
+
+    assert not is_destroyed(cells, "n", 8, "per_tensor")
+    assert not is_destroyed(cells, "absent", 8, "per_tensor")
+    assert DESTROYED_PPL_RATIO == 10.0
+
+
 def test_holdout_sha_separates_streams_the_corpus_hash_cannot():
     assert holdout_sha([1, 2, 3]) == holdout_sha([1, 2, 3])
     assert holdout_sha([1, 2, 3]) != holdout_sha([1, 2, 4])

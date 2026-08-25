@@ -136,6 +136,41 @@ def bitwidth_markdown(cells: dict, *, gran: str = "per_token", seed: int = 0) ->
     return "\n".join(lines)
 
 
+def threshold_sweep(cells: dict, *, seed: int = 0, thresholds=(2, 3, 5, 10, 20, 50, 100)) -> str:
+    """How many cells the destroyed-model threshold flags, as it moves.
+
+    `DESTROYED_PPL_RATIO` is a judgement call and it is load-bearing: it is what
+    removed the element-wise 8-bit per-tensor cell from the ranking in README
+    §5.3. A judgement call that changes conclusions has to be shown to be robust
+    or declared fragile, not asserted to be either — this prints the evidence.
+
+    Read the gaps, not the counts. A threshold sitting inside a wide empty band
+    is insensitive there; one sitting next to a cluster is not.
+    """
+    ratios = []
+    for (model, bits, gran, exc, s), c in cells.items():
+        if exc != "none" or s != seed or not c.get("ppl_ref"):
+            continue
+        ratios.append((c["ppl_quant"] / c["ppl_ref"], model, bits, gran))
+    ratios.sort()
+
+    lines = ["Destroyed-cell threshold sweep (exception=none, seed 0).", ""]
+    lines.append("| threshold | cells flagged | of | cells that change vs 10x |")
+    lines.append("|---|---|---|---|")
+    base = {(m, b, g) for r, m, b, g in ratios if r > 10.0}
+    for t in thresholds:
+        flagged = {(m, b, g) for r, m, b, g in ratios if r > t}
+        delta = flagged ^ base
+        names = ", ".join(f"{m.replace('gated_1b_', '')} {b}b {g.replace('per_', '')}"
+                          for m, b, g in sorted(delta)) or "—"
+        lines.append(f"| {t}× | {len(flagged)} | {len(ratios)} | {names} |")
+
+    lines += ["", "Sorted ppl_quant / ppl_ref, to show where the gaps are:", ""]
+    for r, m, b, g in ratios:
+        lines.append(f"  {r:>12.2f}   {m} {b}b {g}")
+    return "\n".join(lines)
+
+
 def variance(cells: dict, *, bits: int) -> str:
     """Spread of D_sink across calibration draws, per model x granularity.
 
@@ -173,11 +208,16 @@ def main() -> None:
     parser.add_argument("--by-bitwidth", action="store_true",
                         help="one granularity across every width (README §5.5)")
     parser.add_argument("--granularity", default="per_token")
+    parser.add_argument("--threshold-sweep", action="store_true",
+                        help="sensitivity of the destroyed-cell threshold (HANDOFF §12)")
     ns = parser.parse_args()
 
     cells = load_cells(ns.root)
     if ns.by_bitwidth:
         print(bitwidth_markdown(cells, gran=ns.granularity, seed=ns.seed))
+        return
+    if ns.threshold_sweep:
+        print(threshold_sweep(cells, seed=ns.seed))
         return
 
     widths = ns.bits or sorted({k[1] for k in cells}, reverse=True)

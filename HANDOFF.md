@@ -73,7 +73,136 @@ something nobody was looking for, which is the interesting case.
 
 ## 3. Findings
 
-<<RESULTS>>
+Four findings. R1 and R3-rev were in the last handoff; **R4 and R5 are new, and
+R4 corrects the previous handoff's headline "unexpected finding"**.
+
+`README.md` §5 carries the same numbers with fuller argument. Everything here is
+draw 0 on the committed corpus, 95% sequence-bootstrap CIs over 32 held-out
+sequences.
+
+### R1 — the gated checkpoints are genuinely sink-free
+
+| Model | Mean sink mass | Heads > 0.5 | Entropy L0 → Lₙ | Magnitude | Sink-free |
+|---|---|---|---|---|---|
+| GPT-2 small (no QK-Norm) | 0.383 | 0.396 | 3.04 → 2.94 | 83.7× | no |
+| Qwen3-0.6B-Base | 0.523 | 0.565 | 2.09 → 0.79 | 1124× | no |
+| `1B_baseline` (control) | 0.439 | 0.464 | 2.58 → 1.32 | 370× | no |
+| `1B_headwise` (+0.1% params) | **0.057** | **0.004** | 3.04 → 2.76 | **4.1×** | **yes** |
+| `1B_elementwise` (+12% params) | 0.019 | 0.000 | 2.96 → 1.53 | 2.2× | **yes** |
+
+**Re-measured this session on the committed corpus.** The previous numbers were
+taken on a streamed sample that the run JSONs did not record, so sink mass and
+quantization damage were being compared across two different document sets — the
+comparison R4 turns on. Values moved by up to 13% (GPT-2 sink mass 0.340 →
+0.383); every ordering and every conclusion held.
+
+At **+0.1% parameters** the head-wise gate collapses the sink by **90×** in
+residual magnitude, so sink elimination is not a capacity effect.
+
+### R3-rev — the audit answer at 8 bits
+
+| Model | Sink? | per-tensor (2023) | per-token (modern) | Ratio |
+|---|---|---|---|---|
+| GPT-2 small | yes | **+0.2097** [+0.188, +0.232] | +0.0047 [−0.002, +0.011] *ZERO* | 44× |
+| Qwen3-0.6B-Base | yes | **+0.4378** [+0.396, +0.479] | +0.0096 [+0.003, +0.016] | 46× |
+| `1B_baseline` | yes | **+0.6450** [+0.601, +0.690] | +0.0203 [+0.014, +0.026] | 32× |
+| `1B_headwise` | **no** | +0.0117 [−0.0003, +0.024] *ZERO* | +0.0012 [−0.003, +0.005] *ZERO* | — |
+| `1B_elementwise` | **no** | +0.1702 [+0.104, +0.236] **⚠ destroyed** | +0.0009 [−0.006, +0.007] *ZERO* | — |
+
+**The answer has two halves and neither works alone.** *The fix works*: on the
+matched pair, per-tensor `D_sink` falls +0.6450 → +0.0117, a **55×** reduction
+with the CI crossing zero. *And it is redundant*: per-token scaling gets
+**32–46×** on sink-bearing models without touching the architecture.
+
+### R4 — the element-wise arm is destroyed by the quantization it was designed for
+
+**This corrects the previous handoff.** That handoff's "finding I did not
+expect" was that element-wise carries *more* sink-attributable damage than
+head-wise (+0.1702 vs +0.0117, 14.5× gap) despite *less* sink mass. The
+comparison was invalid: element-wise's per-tensor 8-bit cell has **Δppl +3707
+against a reference of 14.5**, so both arms of that `D_sink` are destroyed
+models. It is exactly the failure LIMITATIONS §19 flags at 4 bits, unnoticed at
+8 because only `D_sink` was being reported and never the damage level.
+
+The claim survives on total damage, where it is far stronger:
+
+| by sink mass (least first) | | by per-tensor 8-bit Δppl (least first) | |
+|---|---|---|---|
+| `1B_elementwise` | 0.019 | `1B_headwise` | +2.2 |
+| `1B_headwise` | 0.057 | GPT-2 small | +8.1 |
+| GPT-2 small | 0.383 | Qwen3-0.6B | +14.3 |
+| `1B_baseline` | 0.439 | `1B_baseline` | +18.5 |
+| Qwen3-0.6B | 0.523 | `1B_elementwise` | **+3600** |
+
+Sink mass gets four of five roughly right and puts the roster's **worst** model
+**first**. Element-wise takes **195×** the ungated baseline's damage and
+**1600×** its head-wise sibling's, on a model that differs by one boolean.
+
+`quant/diagnose.py` says where it is not:
+
+| model | weights only | acts per-tensor static | per-tensor dynamic | per-token |
+|---|---|---|---|---|
+| GPT-2 small | +0.16 | +11.82 | +6.35 | +0.27 |
+| Qwen3-0.6B-Base | +0.23 | +14.13 | +9.67 | +0.57 |
+| `1B_baseline` | +0.04 | +17.88 | +13.47 | +0.68 |
+| `1B_headwise` | +0.008 | **+2.29** | +1.30 | +0.40 |
+| `1B_elementwise` | +0.01 | **+3388** | **+3482** | +0.68 |
+
+- **Not the weights** — lossless at 8-bit per-channel everywhere.
+- **Not the model** — per-token is nearly free on element-wise too (+0.68, the
+  same as the baseline). It is a property of sharing one scale across a tensor.
+- **Not calibration clipping** — the *dynamic* arm, which cannot clip, is
+  **worse** (+3482 vs +3388). Range coverage is unremarkable (median 1.056,
+  max 2.42, against 1.65–1.68 elsewhere).
+- **Not the gate.** Leaving `q_proj`, which carries the fused gate, entirely in
+  fp16 changes nothing (+3468). Exempting `o_proj` recovers ~10% of a model at
+  235× its reference. The obvious mechanism was tested and is dead.
+
+**Mechanism open.** Best remaining hypothesis: training with an element-wise
+gate reshapes the activation distribution network-wide into something per-tensor
+scaling cannot represent. That needs a per-layer distributional comparison to
+establish and is **not** claimed. See §11.2.
+
+### R5 — the bit-width question, which the last handoff called the one open one
+
+`D_sink` under **per-token** scaling — the arm that is the research question:
+
+| model | 8-bit | 6-bit | 4-bit |
+|---|---|---|---|
+| GPT-2 small | +0.0047 *ZERO* | **+0.0160** [+0.001, +0.030] | +0.0253 *ZERO* ⚠ |
+| Qwen3-0.6B-Base | +0.0096 | **+0.0379** [+0.015, +0.061] | +3.7120 ⚠ |
+| `1B_baseline` | +0.0203 | +0.0102 *ZERO* | +0.3155 ⚠ |
+| `1B_headwise` | +0.0012 *ZERO* | +0.0021 *ZERO* | +0.4581 ⚠ |
+| `1B_elementwise` | +0.0009 *ZERO* | **+0.1036** [+0.046, +0.168] | +0.0062 *ZERO* ⚠ |
+
+**The redundancy weakens, unevenly, and the answer is qualified.** From 8 to 6
+bits the damage grows 3–4× on GPT-2 and Qwen3 — crossing into
+distinguishable-from-zero on GPT-2 — and 115× on element-wise. It does *not*
+grow on the controlled pair: baseline falls back across zero, head-wise stays
+there. Three of five exclude zero at 6 bits against two of five at 8.
+
+So the redundancy result is **an 8-bit result** with a thinner margin at 6, and
+nothing here rescues the mitigation claim — the arms carrying the controlled
+comparison are the ones that do not show the effect.
+
+**Per-tensor does not survive to 6 bits at all.** Four of five destroyed (Δppl
++1200 to +128000). The exception is `1B_headwise` at **+112** — the +0.1%
+variant, while the +12% variant sits at +127610, **1100× worse**. The
+architectural fix buys something real and large in the low-bit per-tensor
+regime; it buys it in a setting nobody deploys.
+
+**4-bit answers nothing.** Every cell is destroyed under *both* granularities,
+so the apparent per-token `D_sink` there ranks nothing. This is why 6-bit was
+needed and why the last handoff was right to name it.
+
+### What R3-rev corrected in R3 (unchanged, kept for the trail)
+
+| Claim in R3 | Fate |
+|---|---|
+| Matched-pair reduction 269× | **corrected** — 55×, R3 inflated ~5× by the bad corpus |
+| Per-token indistinguishable from zero for *every* model | **corrected** — excludes zero for Qwen3 and `1B_baseline` |
+| The head-wise / element-wise inversion | **held**, and R4 now restates it on a valid metric |
+| Per-tensor column ordering | **held** — ranks stable, magnitudes shift 0.7–1.5× |
 
 ---
 

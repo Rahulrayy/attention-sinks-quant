@@ -31,7 +31,7 @@ that differ by a single boolean in `config.json`:
 
 3. **And sink mass points at the wrong model.** The element-wise gate is the
    paper's headline variant and has the *lowest* sink mass in the roster
-   (0.021). It is also the only checkpoint here that **per-tensor 8-bit
+   (0.019). It is also the only checkpoint here that **per-tensor 8-bit
    quantization destroys**: Δppl **+3600** against an unquantized perplexity of
    14.5, while the ungated baseline it is meant to improve on takes +18.5 and
    the head-wise arm takes +2.2. Holding the sink in fp16 does not rescue it,
@@ -139,21 +139,27 @@ their release makes possible:
 
 | model | mean sink mass | heads > 0.5 | entropy L0 → Lₙ | residual magnitude | sink-free |
 |---|---|---|---|---|---|
-| GPT-2 small (no QK-Norm) | 0.340 | 0.243 | 3.03 → 3.36 | 87.8× | no |
-| Qwen3-0.6B-Base | 0.473 | 0.475 | 2.24 → 0.89 | 1198× | no |
-| `1B_baseline` (control) | 0.385 | 0.362 | 2.71 → 1.85 | 352× | no |
-| `1B_headwise` (+0.1% params) | **0.054** | **0.002** | 3.01 → 2.91 | **3.8×** | **yes** |
-| `1B_elementwise` (+12% params) | 0.021 | 0.000 | 2.92 → 1.42 | 4.4× | **yes** |
+| GPT-2 small (no QK-Norm) | 0.383 | 0.396 | 3.04 → 2.94 | 83.7× | no |
+| Qwen3-0.6B-Base | 0.523 | 0.565 | 2.09 → 0.79 | 1124× | no |
+| `1B_baseline` (control) | 0.439 | 0.464 | 2.58 → 1.32 | 370× | no |
+| `1B_headwise` (+0.1% params) | **0.057** | **0.004** | 3.04 → 2.76 | **4.1×** | **yes** |
+| `1B_elementwise` (+12% params) | 0.019 | 0.000 | 2.96 → 1.53 | 2.2× | **yes** |
+
+Measured on the same committed corpus as every damage number below, which is
+what makes §5.3's comparison between the two metrics legitimate. An earlier
+version of this table was measured on a streamed sample that was never recorded.
 
 The head-wise arm matters most: at **+0.1% parameters** it collapses the sink by
-91× in residual magnitude, so sink elimination is **not** a capacity effect. The
-element-wise arm goes further but carries +12% parameters, and that increment is
-confounded ([LIMITATIONS](LIMITATIONS.md) §13).
+**90×** in residual magnitude, so sink elimination is **not** a capacity effect.
+The element-wise arm goes further but carries +12% parameters, and that
+increment is confounded ([LIMITATIONS](LIMITATIONS.md) §13).
 
-A wrinkle that turns out to matter: head-wise holds attention entropy flat
-across depth (3.01 → 2.91) while element-wise still falls (2.92 → 1.42), close
-to the baseline's fall (2.71 → 1.85). **"Sink-free" does not imply
-"unconcentrated"** — the two gates are not doing the same thing.
+A wrinkle that turns out to matter a great deal: head-wise holds attention
+entropy nearly flat across depth (3.04 → 2.76, a fall of 0.28) while
+element-wise still concentrates sharply (2.96 → 1.53, a fall of 1.43) — closer
+to the ungated baseline's fall of 1.26 than to its head-wise sibling.
+**"Sink-free" does not imply "unconcentrated"**, the two gates are not doing the
+same thing, and §5.3 and §5.4 are where that distinction stops being a curiosity.
 
 ### 5.2 The audit result
 
@@ -178,11 +184,11 @@ draws):
 
 | by sink mass (least first) | | by per-tensor 8-bit damage (least first) | |
 |---|---|---|---|
-| `1B_elementwise` | 0.021 | `1B_headwise` | +2.2 |
-| `1B_headwise` | 0.054 | GPT-2 small | +8.1 |
-| GPT-2 small | 0.340 | Qwen3-0.6B | +14.3 |
-| `1B_baseline` | 0.385 | `1B_baseline` | +18.5 |
-| Qwen3-0.6B | 0.473 | `1B_elementwise` | **+3600** |
+| `1B_elementwise` | 0.019 | `1B_headwise` | +2.2 |
+| `1B_headwise` | 0.057 | GPT-2 small | +8.1 |
+| GPT-2 small | 0.383 | Qwen3-0.6B | +14.3 |
+| `1B_baseline` | 0.439 | `1B_baseline` | +18.5 |
+| Qwen3-0.6B | 0.523 | `1B_elementwise` | **+3600** |
 
 The metric gets four of five roughly right and puts the roster's **worst**
 model **first**. Element-wise carries the least sink mass and takes **195× more
@@ -223,11 +229,16 @@ whoever reads the table.
 
 | model | weights only | acts per-tensor, static | acts per-tensor, dynamic | acts per-token |
 |---|---|---|---|---|
-| GPT-2 small | −0.07 | +9.48 | +6.41 | +0.10 |
-| Qwen3-0.6B-Base | +0.24 | +14.30 | +9.66 | +0.56 |
-| `1B_baseline` | +0.04 | +18.17 | +13.48 | +0.69 |
-| `1B_headwise` | −0.003 | **+2.22** | +1.36 | +0.39 |
-| `1B_elementwise` | +0.02 | **+3416** | **+3505** | +0.69 |
+| GPT-2 small | +0.16 | +11.82 | +6.35 | +0.27 |
+| Qwen3-0.6B-Base | +0.23 | +14.13 | +9.67 | +0.57 |
+| `1B_baseline` | +0.04 | +17.88 | +13.47 | +0.68 |
+| `1B_headwise` | +0.008 | **+2.29** | +1.30 | +0.40 |
+| `1B_elementwise` | +0.01 | **+3388** | **+3482** | +0.68 |
+
+The decomposition is not an independent estimate bolted on: its `full_static`
+arm reproduces each grid cell's `Δppl` to four decimals (element-wise
++3707.3783 here against +3707.38 in the grid), which is a check that the two
+code paths agree on the same held-out slice.
 
 Three things fall out:
 
@@ -241,8 +252,8 @@ Three things fall out:
   calibration pass did not see, which is the obvious explanation for a
   catastrophe — and it is ruled out here: the *dynamic* arm, which sees the
   exact tensor and cannot clip, is **worse** (+3505 vs +3416). Range coverage
-  on element-wise is unremarkable too (median held-out/calibrated ratio 1.055,
-  max 2.64, against 1.63–1.67 max elsewhere).
+  on element-wise is unremarkable too (median held-out/calibrated ratio 1.056,
+  max 2.42, against 1.65–1.68 max elsewhere).
 
 For the four ordinary models static costs 1.3–1.5× dynamic, which is the
 expected clipping penalty. Element-wise is the only arm where that ordering
@@ -257,16 +268,16 @@ gate included, 168 layers quantized instead of 196 — tests that directly:
 
 | element-wise, 8-bit per-tensor | static | dynamic |
 |---|---|---|
-| all layers quantized | +3416 | +3505 |
-| `q_proj` (carries the gate) in fp16 | **+3460** | +3205 |
-| `o_proj` (consumes the gated output) in fp16 | +3099 | +2637 |
-| *head-wise control,* `q_proj` *in fp16* | +2.25 (vs +2.22) | +1.27 (vs +1.36) |
+| all layers quantized | +3388 | +3482 |
+| `q_proj` (carries the gate) in fp16 | **+3468** | +3261 |
+| `o_proj` (consumes the gated output) in fp16 | +3052 | +2611 |
+| *head-wise control,* `q_proj` *in fp16* | +2.24 (vs +2.29) | +1.32 (vs +1.30) |
 
 Exempting the gate projection changes nothing — the model is destroyed either
-way. Exempting `o_proj` recovers ~9%, which on a model at 214× its reference
-perplexity is not a rescue. So the damage is **distributed across the network,
-not concentrated in the gate path**, and the amplification story above is
-wrong as stated.
+way, and the static arm is marginally *worse* for it. Exempting `o_proj`
+recovers ~10%, which on a model at 235× its reference perplexity is not a
+rescue. So the damage is **distributed across the network, not concentrated in
+the gate path**, and the amplification story above is wrong as stated.
 
 What is established: the fragility is activation-side, specific to sharing one
 scale across a tensor, not caused by calibration clipping, and not localised to

@@ -1,59 +1,66 @@
 {
   "model": "gated_1b_elementwise",
   "bits": 8,
-  "ppl_ref": 14.46930003504886,
+  "ppl_ref": 14.47735645757423,
   "seq_len": 256,
   "calib_tokens": 2048,
   "eval_tokens": 8192,
   "calib_seed": 0,
   "corpus": "C:\\Users\\rahul\\OneDrive\\Desktop\\LEIDEN SEM 2\\PERSONAL\\attention\\data\\fineweb_edu.txt",
   "corpus_sha256": "9c8501c905092716",
+  "holdout_sha": "f47598e844632875",
+  "skip_modules": [],
   "arms": [
     {
       "arm": "w_only",
       "n_patched": 196,
       "n_calibrated": 0,
-      "ppl_quant": 14.487105522365574,
-      "delta_ppl": 0.017805487316714164
+      "ppl_quant": 14.492286730112655,
+      "delta_ppl": 0.014930272538425271,
+      "skip_modules": []
     },
     {
       "arm": "a_only_static",
       "n_patched": 196,
       "n_calibrated": 196,
-      "ppl_quant": 3430.7298923075914,
-      "delta_ppl": 3416.2605922725425
+      "ppl_quant": 3402.7019698078752,
+      "delta_ppl": 3388.224613350301,
+      "skip_modules": []
     },
     {
       "arm": "a_only_dynamic",
       "n_patched": 196,
       "n_calibrated": 0,
-      "ppl_quant": 3519.510704091445,
-      "delta_ppl": 3505.041404056396
+      "ppl_quant": 3496.0148317167173,
+      "delta_ppl": 3481.537475259143,
+      "skip_modules": []
     },
     {
       "arm": "a_only_per_token",
       "n_patched": 196,
       "n_calibrated": 0,
-      "ppl_quant": 15.155449639604406,
-      "delta_ppl": 0.6861496045555455
+      "ppl_quant": 15.160796165333274,
+      "delta_ppl": 0.6834397077590442,
+      "skip_modules": []
     },
     {
       "arm": "full_static",
       "n_patched": 196,
       "n_calibrated": 196,
-      "ppl_quant": 3762.672418205826,
-      "delta_ppl": 3748.203118170777
+      "ppl_quant": 3721.855693603563,
+      "delta_ppl": 3707.3783371459886,
+      "skip_modules": []
     }
   ],
   "coverage": {
     "n_layers": 196,
     "n_clipped": 161,
-    "max_ratio": 2.6417910447761193,
-    "median_ratio": 1.0552486187845305,
+    "max_ratio": 2.417910447761194,
+    "median_ratio": 1.0555555555555556,
     "worst_layers": [
       {
         "layer": "model.layers.10.mlp.down_proj",
-        "holdout_over_calib": 2.6417910447761193
+        "holdout_over_calib": 2.417910447761194
       },
       {
         "layer": "model.layers.4.mlp.down_proj",
@@ -61,15 +68,15 @@
       },
       {
         "layer": "model.layers.24.mlp.down_proj",
-        "holdout_over_calib": 1.6619718309859155
-      },
-      {
-        "layer": "model.layers.23.self_attn.o_proj",
-        "holdout_over_calib": 1.5532994923857868
+        "holdout_over_calib": 1.7370892018779343
       },
       {
         "layer": "model.layers.7.self_attn.o_proj",
         "holdout_over_calib": 1.5515151515151515
+      },
+      {
+        "layer": "model.layers.23.self_attn.o_proj",
+        "holdout_over_calib": 1.5376884422110553
       },
       {
         "layer": "model.layers.23.mlp.down_proj",
@@ -80,8 +87,8 @@
         "holdout_over_calib": 1.5307692307692307
       },
       {
-        "layer": "model.layers.16.self_attn.o_proj",
-        "holdout_over_calib": 1.5023474178403755
+        "layer": "model.layers.15.self_attn.o_proj",
+        "holdout_over_calib": 1.5
       }
     ]
   }

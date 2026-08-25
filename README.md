@@ -284,32 +284,42 @@ gentle? 4-bit could not settle it — every cell there is destroyed under **both
 granularities, so the apparent per-token `D_sink` at 4 bits ranks nothing. 6-bit
 was run to put an interpretable width in between.
 
-`D_sink` under **per-token** scaling, the arm that is the research question:
+`D_sink` under **per-token** scaling, the arm that is the research question.
+⚠ marks a width where that model is destroyed under per-token too, so the cell
+ranks nothing and is shown only to make the 4-bit column's uselessness visible
+rather than omitted:
 
-| model | 8-bit | 6-bit |
-|---|---|---|
-| GPT-2 small | +0.0047 [−0.002, +0.011] *ZERO* | **+0.0347** [+0.021, +0.048] |
-| Qwen3-0.6B-Base | +0.0096 [+0.003, +0.016] | **+0.0393** [+0.015, +0.064] |
-| `1B_baseline` | +0.0203 [+0.014, +0.026] | +0.0060 [−0.011, +0.023] *ZERO* |
-| `1B_headwise` | +0.0012 [−0.003, +0.005] *ZERO* | +0.0021 [−0.019, +0.023] *ZERO* |
-| `1B_elementwise` | +0.0009 [−0.006, +0.007] *ZERO* | **+0.1035** [+0.047, +0.168] |
+| model | 8-bit | 6-bit | 4-bit |
+|---|---|---|---|
+| GPT-2 small | +0.0047 [−0.002, +0.011] *ZERO* | **+0.0160** [+0.001, +0.030] | +0.0253 [−0.018, +0.070] *ZERO* ⚠ |
+| Qwen3-0.6B-Base | +0.0096 [+0.003, +0.016] | **+0.0379** [+0.015, +0.061] | +3.7120 [+3.289, +4.112] ⚠ |
+| `1B_baseline` | +0.0203 [+0.014, +0.026] | +0.0102 [−0.007, +0.027] *ZERO* | +0.3155 [+0.173, +0.477] ⚠ |
+| `1B_headwise` | +0.0012 [−0.003, +0.005] *ZERO* | +0.0021 [−0.018, +0.022] *ZERO* | +0.4581 [+0.386, +0.531] ⚠ |
+| `1B_elementwise` | +0.0009 [−0.006, +0.007] *ZERO* | **+0.1036** [+0.046, +0.168] | +0.0062 [−0.061, +0.074] *ZERO* ⚠ |
 
 ![Figure 2 — bit-width dependence](runs/results/fig2_bitwidth.png)
 
-**The redundancy weakens but does not collapse.** Sink-attributable damage under
-per-token scaling grows by 4–7× from 8 to 6 bits on three of five checkpoints
-and becomes distinguishable from zero on GPT-2 and element-wise. It does not
-grow on the controlled pair: `1B_baseline` and `1B_headwise` both sit at zero at
-6 bits, the baseline's interval having widened rather than moved. So the answer
-is *qualified rather than clean*: the effect is not bit-width invariant, and the
-arms that carry the controlled comparison do not show it.
+**The redundancy weakens, and it weakens unevenly.** Going from 8 to 6 bits,
+sink-attributable damage under per-token scaling grows **3–4×** on GPT-2 and
+Qwen3 — crossing from indistinguishable-from-zero to distinguishable on GPT-2 —
+and **115×** on the element-wise arm, the same arm that fails everywhere else in
+this audit. It does *not* grow on the controlled pair: `1B_baseline` falls back
+across zero (its interval widening rather than moving) and `1B_headwise` stays
+at zero. Three of five checkpoints exclude zero at 6 bits against two of five at
+8 bits.
+
+So the answer is *qualified rather than clean*. Per-token scaling's absorption of
+sink damage is **not bit-width invariant** — but the arms that carry the
+controlled architectural comparison are precisely the ones that do not show the
+effect, so this does not rescue the mitigation claim. It says the redundancy
+result is an 8-bit result, and that the margin is thinner at 6.
 
 **Per-tensor quantization does not survive to 6 bits at all.** Four of five
-models are destroyed (Δppl +1200 to +129000). The single exception is
-`1B_headwise` at +107 — degraded by 8×, but the only checkpoint still on the
+models are destroyed (Δppl +1200 to +128000). The single exception is
+`1B_headwise` at +112 — degraded by 8×, and the only checkpoint still on the
 board. So the architectural fix does buy something real and large in the low-bit
-per-tensor regime; it buys it in a setting nobody deploys, and the cheap variant
-is the one that buys it.
+per-tensor regime. It buys it in a setting nobody deploys, and the **+0.1%**
+variant is the one that buys it while the **+12%** variant is 1100× worse.
 
 ### 5.6 Negative and null results
 

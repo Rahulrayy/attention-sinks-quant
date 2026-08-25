@@ -1,13 +1,14 @@
 {
   "model": "gated_1b_elementwise",
   "bits": 8,
-  "ppl_ref": 14.46930003504886,
+  "ppl_ref": 14.47735645757423,
   "seq_len": 256,
   "calib_tokens": 2048,
   "eval_tokens": 8192,
   "calib_seed": 0,
   "corpus": "C:\\Users\\rahul\\OneDrive\\Desktop\\LEIDEN SEM 2\\PERSONAL\\attention\\data\\fineweb_edu.txt",
   "corpus_sha256": "9c8501c905092716",
+  "holdout_sha": "f47598e844632875",
   "skip_modules": [
     "o_proj"
   ],
@@ -16,8 +17,8 @@
       "arm": "a_only_static",
       "n_patched": 168,
       "n_calibrated": 168,
-      "ppl_quant": 3113.2657817956083,
-      "delta_ppl": 3098.7964817605593,
+      "ppl_quant": 3066.4801941598016,
+      "delta_ppl": 3052.002837702227,
       "skip_modules": [
         "o_proj"
       ]
@@ -26,8 +27,8 @@
       "arm": "a_only_dynamic",
       "n_patched": 168,
       "n_calibrated": 0,
-      "ppl_quant": 2651.2968747741934,
-      "delta_ppl": 2636.8275747391444,
+      "ppl_quant": 2625.279397337312,
+      "delta_ppl": 2610.8020408797374,
       "skip_modules": [
         "o_proj"
       ]

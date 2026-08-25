@@ -1,55 +1,62 @@
 {
   "model": "qwen3_0.6b_base",
   "bits": 8,
-  "ppl_ref": 17.880791432882745,
+  "ppl_ref": 17.914089644138283,
   "seq_len": 256,
   "calib_tokens": 2048,
   "eval_tokens": 8192,
   "calib_seed": 0,
   "corpus": "C:\\Users\\rahul\\OneDrive\\Desktop\\LEIDEN SEM 2\\PERSONAL\\attention\\data\\fineweb_edu.txt",
   "corpus_sha256": "9c8501c905092716",
+  "holdout_sha": "f47598e844632875",
+  "skip_modules": [],
   "arms": [
     {
       "arm": "w_only",
       "n_patched": 196,
       "n_calibrated": 0,
-      "ppl_quant": 18.118154121377344,
-      "delta_ppl": 0.23736268849459918
+      "ppl_quant": 18.145751272369985,
+      "delta_ppl": 0.2316616282317021,
+      "skip_modules": []
     },
     {
       "arm": "a_only_static",
       "n_patched": 196,
       "n_calibrated": 196,
-      "ppl_quant": 32.18275850645819,
-      "delta_ppl": 14.301967073575447
+      "ppl_quant": 32.04042147919092,
+      "delta_ppl": 14.126331835052635,
+      "skip_modules": []
     },
     {
       "arm": "a_only_dynamic",
       "n_patched": 196,
       "n_calibrated": 0,
-      "ppl_quant": 27.545274589247754,
-      "delta_ppl": 9.664483156365009
+      "ppl_quant": 27.58649189620985,
+      "delta_ppl": 9.672402252071567,
+      "skip_modules": []
     },
     {
       "arm": "a_only_per_token",
       "n_patched": 196,
       "n_calibrated": 0,
-      "ppl_quant": 18.44474181064577,
-      "delta_ppl": 0.5639503777630246
+      "ppl_quant": 18.48253204060774,
+      "delta_ppl": 0.5684423964694574,
+      "skip_modules": []
     },
     {
       "arm": "full_static",
       "n_patched": 196,
       "n_calibrated": 196,
-      "ppl_quant": 31.87760510884785,
-      "delta_ppl": 13.996813675965104
+      "ppl_quant": 32.18789097396053,
+      "delta_ppl": 14.273801329822245,
+      "skip_modules": []
     }
   ],
   "coverage": {
     "n_layers": 196,
-    "n_clipped": 170,
+    "n_clipped": 163,
     "max_ratio": 1.6507936507936507,
-    "median_ratio": 1.0379746835443038,
+    "median_ratio": 1.0283687943262412,
     "worst_layers": [
       {
         "layer": "model.layers.7.self_attn.o_proj",
@@ -80,8 +87,8 @@
         "holdout_over_calib": 1.2628865979381443
       },
       {
-        "layer": "model.layers.17.mlp.down_proj",
-        "holdout_over_calib": 1.2553191489361701
+        "layer": "model.layers.3.mlp.down_proj",
+        "holdout_over_calib": 1.2477064220183487
       }
     ]
   }

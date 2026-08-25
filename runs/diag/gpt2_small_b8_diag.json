@@ -1,87 +1,94 @@
 {
   "model": "gpt2_small",
   "bits": 8,
-  "ppl_ref": 29.42392783253628,
+  "ppl_ref": 29.647933047426474,
   "seq_len": 256,
   "calib_tokens": 2048,
   "eval_tokens": 8192,
   "calib_seed": 0,
   "corpus": "C:\\Users\\rahul\\OneDrive\\Desktop\\LEIDEN SEM 2\\PERSONAL\\attention\\data\\fineweb_edu.txt",
   "corpus_sha256": "9c8501c905092716",
+  "holdout_sha": "6440cdc0c07bc771",
+  "skip_modules": [],
   "arms": [
     {
       "arm": "w_only",
       "n_patched": 48,
       "n_calibrated": 0,
-      "ppl_quant": 29.354671375060022,
-      "delta_ppl": -0.06925645747625708
+      "ppl_quant": 29.80797711875055,
+      "delta_ppl": 0.1600440713240765,
+      "skip_modules": []
     },
     {
       "arm": "a_only_static",
       "n_patched": 48,
       "n_calibrated": 48,
-      "ppl_quant": 38.8992848142041,
-      "delta_ppl": 9.475356981667822
+      "ppl_quant": 41.471638730723924,
+      "delta_ppl": 11.823705683297451,
+      "skip_modules": []
     },
     {
       "arm": "a_only_dynamic",
       "n_patched": 48,
       "n_calibrated": 0,
-      "ppl_quant": 35.83057654147796,
-      "delta_ppl": 6.406648708941681
+      "ppl_quant": 36.00066572099333,
+      "delta_ppl": 6.352732673566859,
+      "skip_modules": []
     },
     {
       "arm": "a_only_per_token",
       "n_patched": 48,
       "n_calibrated": 0,
-      "ppl_quant": 29.523941674941995,
-      "delta_ppl": 0.10001384240571554
+      "ppl_quant": 29.920393518521607,
+      "delta_ppl": 0.27246047109513327,
+      "skip_modules": []
     },
     {
       "arm": "full_static",
       "n_patched": 48,
       "n_calibrated": 48,
-      "ppl_quant": 38.86116937285819,
-      "delta_ppl": 9.437241540321914
+      "ppl_quant": 41.29479125684057,
+      "delta_ppl": 11.646858209414095,
+      "skip_modules": []
     }
   ],
   "coverage": {
     "n_layers": 48,
-    "n_clipped": 36,
-    "max_ratio": 1.6326530612244898,
-    "median_ratio": 1.0134228187919463,
+    "n_clipped": 35,
+    "max_ratio": 1.6842105263157894,
+    "median_ratio": 1.0176211453744493,
     "worst_layers": [
       {
         "layer": "transformer.h.10.mlp.c_proj",
-        "holdout_over_calib": 1.6326530612244898
+        "holdout_over_calib": 1.6842105263157894
       },
       {
         "layer": "transformer.h.9.attn.c_proj",
-        "holdout_over_calib": 1.3092369477911647
+        "holdout_over_calib": 1.328
       },
       {
         "layer": "transformer.h.10.attn.c_proj",
-        "holdout_over_calib": 1.221476510067114
+        "holdout_over_calib": 1.2620689655172415
       },
       {
         "layer": "transformer.h.6.mlp.c_proj",
-        "holdout_over_calib": 1.218543046357616
+        "holdout_over_calib": 1.1625
       },
       {
-        "layer": "transformer.h.5.attn.c_proj",
-        "holdout_over_calib": 1.1285714285714286
+        "layer": "transformer.h.7.attn.c_proj",
+        "holdout_over_calib": 1.15695067264574
       },
       {
         "layer": "transformer.h.5.mlp.c_proj",
-        "holdout_over_calib": 1.1275167785234899
+        "holdout_over_calib": 1.1409395973154361
+      },
+      {
+        "layer": "transformer.h.5.attn.c_proj",
+        "holdout_over_calib": 1.129496402877698
       },
       {
         "layer": "transformer.h.8.attn.c_proj",
-        "holdout_over_calib": 1.1272727272727272
-      },
-      {
-        "layer": "transformer.h.7.mlp.c_proj",
-        "holdout_over_calib": 1.1130952380952381
+        "holdout_over_calib": 1.1221719457013575
       }
     ]
   }

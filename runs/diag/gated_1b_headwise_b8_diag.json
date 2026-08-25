@@ -1,55 +1,62 @@
 {
   "model": "gated_1b_headwise",
   "bits": 8,
-  "ppl_ref": 14.57637089891779,
+  "ppl_ref": 14.591835641255223,
   "seq_len": 256,
   "calib_tokens": 2048,
   "eval_tokens": 8192,
   "calib_seed": 0,
   "corpus": "C:\\Users\\rahul\\OneDrive\\Desktop\\LEIDEN SEM 2\\PERSONAL\\attention\\data\\fineweb_edu.txt",
   "corpus_sha256": "9c8501c905092716",
+  "holdout_sha": "f47598e844632875",
+  "skip_modules": [],
   "arms": [
     {
       "arm": "w_only",
       "n_patched": 196,
       "n_calibrated": 0,
-      "ppl_quant": 14.573166344664424,
-      "delta_ppl": -0.0032045542533669646
+      "ppl_quant": 14.599993427028446,
+      "delta_ppl": 0.008157785773223125,
+      "skip_modules": []
     },
     {
       "arm": "a_only_static",
       "n_patched": 196,
       "n_calibrated": 196,
-      "ppl_quant": 16.7999110621722,
-      "delta_ppl": 2.223540163254409
+      "ppl_quant": 16.877003486243016,
+      "delta_ppl": 2.285167844987793,
+      "skip_modules": []
     },
     {
       "arm": "a_only_dynamic",
       "n_patched": 196,
       "n_calibrated": 0,
-      "ppl_quant": 15.9358794740821,
-      "delta_ppl": 1.359508575164309
+      "ppl_quant": 15.891773706534368,
+      "delta_ppl": 1.2999380652791448,
+      "skip_modules": []
     },
     {
       "arm": "a_only_per_token",
       "n_patched": 196,
       "n_calibrated": 0,
-      "ppl_quant": 14.968023823065721,
-      "delta_ppl": 0.3916529241479303
+      "ppl_quant": 14.986790272332149,
+      "delta_ppl": 0.3949546310769261,
+      "skip_modules": []
     },
     {
       "arm": "full_static",
       "n_patched": 196,
       "n_calibrated": 196,
-      "ppl_quant": 16.865738316943588,
-      "delta_ppl": 2.2893674180257975
+      "ppl_quant": 16.88549150792005,
+      "delta_ppl": 2.293655866664828,
+      "skip_modules": []
     }
   ],
   "coverage": {
     "n_layers": 196,
-    "n_clipped": 138,
+    "n_clipped": 140,
     "max_ratio": 1.6687116564417177,
-    "median_ratio": 1.0352112676056338,
+    "median_ratio": 1.0384615384615385,
     "worst_layers": [
       {
         "layer": "model.layers.0.mlp.down_proj",

@@ -1,53 +1,60 @@
 {
   "model": "gated_1b_baseline",
   "bits": 8,
-  "ppl_ref": 14.653925054360407,
+  "ppl_ref": 14.70770960215786,
   "seq_len": 256,
   "calib_tokens": 2048,
   "eval_tokens": 8192,
   "calib_seed": 0,
   "corpus": "C:\\Users\\rahul\\OneDrive\\Desktop\\LEIDEN SEM 2\\PERSONAL\\attention\\data\\fineweb_edu.txt",
   "corpus_sha256": "9c8501c905092716",
+  "holdout_sha": "f47598e844632875",
+  "skip_modules": [],
   "arms": [
     {
       "arm": "w_only",
       "n_patched": 196,
       "n_calibrated": 0,
-      "ppl_quant": 14.696892324336172,
-      "delta_ppl": 0.042967269975765277
+      "ppl_quant": 14.750032566454342,
+      "delta_ppl": 0.0423229642964813,
+      "skip_modules": []
     },
     {
       "arm": "a_only_static",
       "n_patched": 196,
       "n_calibrated": 196,
-      "ppl_quant": 32.8279967188934,
-      "delta_ppl": 18.174071664532995
+      "ppl_quant": 32.588900629286655,
+      "delta_ppl": 17.881191027128793,
+      "skip_modules": []
     },
     {
       "arm": "a_only_dynamic",
       "n_patched": 196,
       "n_calibrated": 0,
-      "ppl_quant": 28.129139796875204,
-      "delta_ppl": 13.475214742514797
+      "ppl_quant": 28.173309518120423,
+      "delta_ppl": 13.465599915962562,
+      "skip_modules": []
     },
     {
       "arm": "a_only_per_token",
       "n_patched": 196,
       "n_calibrated": 0,
-      "ppl_quant": 15.339247659612587,
-      "delta_ppl": 0.6853226052521801
+      "ppl_quant": 15.387344084659807,
+      "delta_ppl": 0.679634482501946,
+      "skip_modules": []
     },
     {
       "arm": "full_static",
       "n_patched": 196,
       "n_calibrated": 196,
-      "ppl_quant": 32.85601784549765,
-      "delta_ppl": 18.20209279113724
+      "ppl_quant": 32.65019418789903,
+      "delta_ppl": 17.94248458574117,
+      "skip_modules": []
     }
   ],
   "coverage": {
     "n_layers": 196,
-    "n_clipped": 124,
+    "n_clipped": 121,
     "max_ratio": 1.6492537313432836,
     "median_ratio": 1.0248447204968945,
     "worst_layers": [
@@ -60,28 +67,28 @@
         "holdout_over_calib": 1.4054054054054055
       },
       {
+        "layer": "model.layers.9.mlp.down_proj",
+        "holdout_over_calib": 1.401360544217687
+      },
+      {
         "layer": "model.layers.11.mlp.down_proj",
-        "holdout_over_calib": 1.3587786259541985
+        "holdout_over_calib": 1.3740458015267176
       },
       {
         "layer": "model.layers.19.mlp.down_proj",
         "holdout_over_calib": 1.325
       },
       {
-        "layer": "model.layers.18.self_attn.o_proj",
-        "holdout_over_calib": 1.3067484662576687
-      },
-      {
         "layer": "model.layers.8.mlp.down_proj",
         "holdout_over_calib": 1.303225806451613
       },
       {
-        "layer": "model.layers.24.self_attn.o_proj",
-        "holdout_over_calib": 1.2936170212765958
-      },
-      {
         "layer": "model.layers.3.self_attn.o_proj",
         "holdout_over_calib": 1.2883435582822085
+      },
+      {
+        "layer": "model.layers.24.self_attn.o_proj",
+        "holdout_over_calib": 1.2773109243697478
       }
     ]
   }

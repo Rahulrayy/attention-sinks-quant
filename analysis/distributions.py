@@ -258,9 +258,12 @@ def sweep(dist: dict, diag: dict, thresholds=(0.5, 0.7, 0.9, 0.95, 0.99)) -> str
 
     # The ordering is the claim, not the counts, so it is checked here rather
     # than left to the reader. Ties count as ordered: two models the statistic
-    # cannot separate is a weaker result, not a wrong one.
+    # cannot separate is a weaker result, not a wrong one. A column where every
+    # count is IDENTICAL does not, though -- it is trivially non-decreasing
+    # while ranking nothing, which is what a threshold strict enough to flag no
+    # layer anywhere produces.
     def ordered(vals):
-        return all(a <= b for a, b in zip(vals, vals[1:]))
+        return len(set(vals)) > 1 and all(a <= b for a, b in zip(vals, vals[1:]))
 
     ok = [t for t in thresholds if ordered(counts[t])]
     bad = [t for t in thresholds if not ordered(counts[t])]

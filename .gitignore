@@ -1,19 +1,28 @@
 # runs/ is gitignored EXCEPT the committed results: the summary CSVs, the
 # figures the README embeds (a gitignored figure is a broken image on GitHub),
 # and the diagnostic and distribution JSONs that the headline claims in
-# README §5.4 rest on. Both are small (~360 KB each set) and neither is
+# README §5.4 and §5.7 rest on. They are small (~360 KB per set) and none is
 # regenerable without the checkpoints and an hour of GPU time.
+#
+# The diag/dist patterns are GLOBBED (`runs/diag*`) so that a per-corpus
+# variant — runs/diag_code/, runs/dist_code/ — is committed automatically. It
+# was not, when the second corpus was added, and the JSONs behind §5.7 would
+# have been silently dropped from the commit that cited them.
+#
+# The grids themselves stay ignored at any corpus: runs/quant/ is 300 files and
+# runs/quant_code/ another 20, and they are reproducible from the committed
+# corpora given the checkpoints.
 runs/*
 !runs/results/
 runs/results/*
 !runs/results/*.csv
 !runs/results/*.png
-!runs/diag/
-runs/diag/*
-!runs/diag/*.json
-!runs/dist/
-runs/dist/*
-!runs/dist/*.json
+!runs/diag*/
+runs/diag*/*
+!runs/diag*/*.json
+!runs/dist*/
+runs/dist*/*
+!runs/dist*/*.json
 
 # data/ IS committed. The corpus swap moved the headline by ~5x, so the exact
 # document set is part of the result, not an input that can be regenerated.

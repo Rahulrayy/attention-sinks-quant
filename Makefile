@@ -7,7 +7,7 @@ MODELS := gated_1b_baseline gated_1b_headwise gated_1b_elementwise qwen3_0.6b_ba
 SEEDS  := 0 1 2 3 4
 ARMS   := baseline softmax1 gated
 
-.PHONY: test gate measure quant dist train figs repro clean
+.PHONY: test gate measure quant dist corpus train figs repro clean
 
 ## The Day 3 hard gate. Nothing downstream is valid until this passes.
 gate:
@@ -57,12 +57,27 @@ dist:
 	done
 	$(PY) -m analysis.distributions
 
+## The second-corpus arm (R7). 8-bit only; --text-file is the only difference,
+## and the provenance fields keep the two grids distinguishable.
+corpus: gate
+	@for m in $(MODELS); do \
+	  $(PY) -m quant.evaluate --model $$m --grid --bits-list 8 \
+	    --granularities per_tensor,per_token --exceptions none,position_0 --seeds 0 \
+	    --seq-len 256 --calib-tokens 2048 --eval-tokens 8192 \
+	    --text-file data/code_python.txt --out runs/quant_code || exit 1; \
+	  $(PY) -m quant.diagnose --model $$m --bits 8 --skip-coverage \
+	    --text-file data/code_python.txt --out runs/diag_code || exit 1; \
+	  $(PY) -m quant.distributions --model $$m --bits 8 \
+	    --text-file data/code_python.txt --out runs/dist_code || exit 1; \
+	done
+	$(PY) -m analysis.corpora
+
 figs:
 	$(PY) -m analysis.aggregate
 	$(PY) -m analysis.figures
 
 ## Full reproduction. See README for expected runtime and hardware.
-repro: gate measure quant dist train figs
+repro: gate measure quant dist corpus train figs
 
 clean:
 	rm -rf runs/sinks/* runs/quant/* runs/train/*

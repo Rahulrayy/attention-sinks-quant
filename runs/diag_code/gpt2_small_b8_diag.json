@@ -1,0 +1,56 @@
+{
+  "model": "gpt2_small",
+  "bits": 8,
+  "ppl_ref": 11.218883779734496,
+  "seq_len": 256,
+  "calib_tokens": 2048,
+  "eval_tokens": 8192,
+  "calib_seed": 0,
+  "corpus": "data/code_python.txt",
+  "corpus_sha256": "21f9dee1f17187c2",
+  "holdout_sha": "1e455be71d0f5835",
+  "skip_modules": [],
+  "arms": [
+    {
+      "arm": "w_only",
+      "n_patched": 48,
+      "n_calibrated": 0,
+      "ppl_quant": 11.163904913203897,
+      "delta_ppl": -0.05497886653059858,
+      "skip_modules": []
+    },
+    {
+      "arm": "a_only_static",
+      "n_patched": 48,
+      "n_calibrated": 48,
+      "ppl_quant": 15.191126153858727,
+      "delta_ppl": 3.9722423741242316,
+      "skip_modules": []
+    },
+    {
+      "arm": "a_only_dynamic",
+      "n_patched": 48,
+      "n_calibrated": 0,
+      "ppl_quant": 13.670679122958243,
+      "delta_ppl": 2.451795343223747,
+      "skip_modules": []
+    },
+    {
+      "arm": "a_only_per_token",
+      "n_patched": 48,
+      "n_calibrated": 0,
+      "ppl_quant": 11.349388290234137,
+      "delta_ppl": 0.13050451049964096,
+      "skip_modules": []
+    },
+    {
+      "arm": "full_static",
+      "n_patched": 48,
+      "n_calibrated": 48,
+      "ppl_quant": 15.464695282704099,
+      "delta_ppl": 4.2458115029696035,
+      "skip_modules": []
+    }
+  ],
+  "coverage": null
+}

@@ -8,6 +8,7 @@ numbers — it is a new experiment. See `LIMITATIONS.md` §18.
 | File | Bytes | sha256 (first 32) | Docs | Used by |
 |---|---|---|---|---|
 | `fineweb_edu.txt` | 1,213,115 | `9c8501c90509271634a9dc64c86458c5` | 281 | `runs/quant/` — **current** grid, R3-rev |
+| `code_python.txt` | 1,247,005 | `21f9dee1f17187c2d88c1690faef1206` | 137 | `runs/quant_code/` — the **second-corpus** arm, R7 |
 | `repo_corpus_archived.txt` | 232,058 | `c467928c3f1c6a393583686f9b15a5bd` | 907 | `runs/quant_repo_corpus/` — **archived**, R3 |
 
 Files are stored with CRLF line endings, which is how they were written. Every
@@ -16,7 +17,7 @@ so Python's universal-newline translation yields LF before tokenization — the
 byte-level line endings do not enter the token stream. Do not read them in
 binary mode and decode manually; that would change the tokenization.
 
-Character counts as seen by a text-mode reader: 1,202,577 and 228,362.
+Character counts as seen by a text-mode reader: 1,202,577, 228,362 and 1,213,872.
 
 ## Provenance
 
@@ -25,6 +26,15 @@ Character counts as seen by a text-mode reader: 1,202,577 and 228,362.
 (stubs skew short-context statistics), joined with a blank line, stopping at
 1.2M characters. Regenerate with `python -m data.fetch_fineweb`, but note that
 the exact document set depends on the stream and will differ.
+
+`code_python.txt` — `codeparrot/codeparrot-clean-valid`, split `train`,
+streamed in order, documents shorter than 500 characters dropped, joined with a
+blank line, stopping at 1.2M characters — every parameter identical to
+`fineweb_edu.txt` so that domain is the only thing that differs between the two
+grids. Regenerate with `python -m data.fetch_code`, same caveat as above.
+Chosen as the furthest available point from the other two, which are both
+prose; it is also a *validation* split, so it was never a training target for
+any checkpoint in the roster. See README §5.7 and `analysis/corpora.py`.
 
 `repo_corpus_archived.txt` — the small in-repo corpus used before the swap.
 Kept deliberately: R3-vs-R3-rev rests on it, and deleting it would make the

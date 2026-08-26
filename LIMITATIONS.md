@@ -223,15 +223,36 @@ cosmetic:
 | Per-token `D_sink` excludes zero | on 1 of 5 models | on **2 of 5** |
 | Head-wise / element-wise inversion | 34× gap | **14.5× gap**, held |
 
-One swap moved the headline by ~5× and moved two CIs across zero. Two corpora
-cannot bound a sensitivity that large; they only demonstrate it exists. Nothing
-here licenses a claim of the form "`D_sink` under per-token scaling is X nats"
-without naming the corpus. The findings that survived the swap — the ranks, and
-the inversion — are the ones to weight, and they are weighted that way in the
-README for exactly this reason.
+One swap moved the headline by ~5× and moved two CIs across zero. Nothing here
+licenses a claim of the form "`D_sink` under per-token scaling is X nats"
+without naming the corpus.
 
-Both corpora are committed under `data/` with hashes, so the two grids remain
-distinguishable and re-checkable. Re-streaming FineWeb-Edu gives a different
+**A third corpus has since been added** (`data/code_python.txt`, 1.2M characters
+of Python source) and 8-bit cells re-run on it. This bounds the sensitivity for
+the first time, and the bound is uneven — the point of §5.7 and of
+`analysis/corpora.py`:
+
+| Claim | Survived the domain shift? |
+|---|---|
+| The fix works (matched pair, per-tensor) | **yes** — 55× web, 46× code |
+| The redundancy (per-token absorbs it) | **yes, more strongly** — max \|`D_sink`\| 0.0117 nats, 3/5 point estimates negative |
+| R4, element-wise destroyed | **yes, worse** — 1003× its reference vs 257× |
+| R6 localisation (layer-0 MLP, causal) | **yes, stronger** — 3265× vs 530× from three modules |
+| R6 cross-model ranking (correlational) | **no** — orders the roster at no threshold (**C21**) |
+
+The pattern is not that "everything held" or "everything moved". Interventions
+with controls held; a rank correlation over five models did not. That is the
+distinction to carry forward, and it is why the retraction is filed as a
+correction rather than a caveat.
+
+**What is still unbounded.** Three corpora, all English, all 1.2M characters,
+all read whole-file at seq_len 256. Nothing here speaks to other languages,
+much longer contexts, or genuinely adversarial input. And the code arm is
+**8-bit only** — the 6- and 4-bit grids exist on FineWeb-Edu alone, so §5.5's
+bit-width conclusions have not been corpus-checked at all.
+
+All three corpora are committed under `data/` with hashes, so the grids remain
+distinguishable and re-checkable. Re-streaming any of them gives a different
 document set and is a new experiment, not a reproduction.
 
 ### 19. The 4-bit cells are uninterpretable, and 6-bit is what answers that
@@ -285,7 +306,7 @@ were confirmed to be on the same held-out slice (C19).
 hash cannot do that job — a changed reader produces a different token stream
 from byte-identical input.
 
-### 21. The layer-0 localisation is causal; the ranking statistic across models is not
+### 21. The layer-0 localisation is causal; the ranking statistic was not, and is retracted
 README §5.4 makes two claims of different strength and they should not be read
 as one.
 
@@ -295,21 +316,20 @@ sibling checkpoints does nothing and a 24-module exemption of other blocks
 changes almost nothing. That is an intervention with its own controls, on one
 model, and it stands on its own.
 
-The **ranking** claim is weak. "Annihilated-layer count orders the roster by
-per-tensor damage" rests on **five models**, one of which (element-wise) is
-258× more damaged than the next and therefore carries most of the apparent
-correlation on its own. Five points cannot distinguish a mechanism from a
-coincidence that happens to sort correctly, and no significance is claimed for
-it anywhere.
+The **ranking** claim was weak and is now **retracted (C21)**. "Annihilated-layer
+count orders the roster by per-tensor damage" rested on **five models**, one of
+which (element-wise) is 258× more damaged than the next and therefore carried
+most of the apparent correlation on its own. This section originally said that
+five points cannot distinguish a mechanism from a coincidence that happens to
+sort correctly. The second corpus showed it was the coincidence: on Python
+source the count orders the roster at **no threshold**, against three thresholds
+on FineWeb-Edu (README §5.7).
 
-It is also threshold-dependent in a way worth stating plainly.
-`python -m analysis.distributions --sweep` prints the count at 50%, 70%, 90%,
-95% and 99%; the ordering holds at **90% and above** and **fails at 50% and
-70%**, where head-wise — many partially-underflowing layers, none annihilated —
-outranks models that are far more damaged. The honest reading is that partial
-underflow is survivable and near-total underflow is not, so this is a threshold
-effect rather than a dose-response, and the count is a *detector* of the failure
-rather than a measure of its size.
+What remains true of the statistic is narrower and threshold-shaped. Partial
+underflow is survivable and near-total underflow is not — head-wise carries many
+layers at 50–70% underflow and is the least damaged model on both corpora — so
+the count detects the *kind* of failure without measuring its size or ranking
+models against each other.
 
 What is not explained at all is **why** an element-wise output gate reshapes
 that particular tensor during training. The measurement locates the failure and
@@ -317,8 +337,8 @@ says nothing about its origin. Establishing that would need training-time
 evidence — checkpoints over the course of a run — which this project does not
 have and which its de-scoping section (Track B) already ruled out.
 
-Finally, all of it is one bit width (8) on one corpus. The dispersion statistic
-is bit-width-dependent by construction: `eff_bits` and both underflow fractions
-are computed against a specific integer grid, so the layer-0 tensor's 99.26%
-underflow is an 8-bit number and the 6- and 4-bit equivalents have not been
-measured. §18 applies here as everywhere else.
+Finally, all of it is one bit width. The dispersion statistic is
+bit-width-dependent by construction: `eff_bits` and both underflow fractions are
+computed against a specific integer grid, so the layer-0 tensor's ~99.2%
+underflow is an **8-bit** number and the 6- and 4-bit equivalents have not been
+measured on either corpus.

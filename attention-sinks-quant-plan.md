@@ -33,6 +33,7 @@ standard §6 imposes on metric changes, applied to the plan itself.
 | C16 | §9 | **No Qwen checkpoint in the roster has a BOS token.** Trap §9.4's cross-model BOS protocol is unexecutable as written | Kills an axis |
 | C19 | §6, §7 | **The repo CLI never reproduced the committed cells.** `quant/evaluate.py` tokenized the corpus line-by-line while the scratchpad driver that produced all 200 cells read it as one string. Same bytes, same tokenizer, different held-out slice — streams diverge at token 846. Surfaced as a 0.06–0.76% `ppl_ref` shift that looked like noise | **Silently incomparable cells** |
 | C20 | §7 | **"Not in the projections I tested" was written up as "distributed across the network."** Two failed localisation attempts (`q_proj`, `o_proj`) were read as evidence of a diffuse cause. The damage is in fact localised to **three modules** — the layer-0 MLP — and exempting them recovers a 530× improvement | **Retracted an inference, not a measurement** |
+| C21 | §6, §7 | **R6's cross-model ranking did not survive a second corpus.** "Annihilated-layer count orders the roster by per-tensor damage" holds on FineWeb-Edu at three thresholds and on Python source at **none**. Five models with one 258× outlier were never enough to tell a mechanism from a lucky sort. The *causal* half of R6 reproduced and strengthened | **Retracts half a finding** |
 
 Findings that are *results* rather than corrections are marked **✎ RESULT**:
 [C12](#c12) (early preview on GPT-2), [R1](#r1) (the gated trio is sink-free),
@@ -635,6 +636,37 @@ attention-sinks-quant/
 > the search, not about the thing.** The write-up rule that follows is to name
 > the search space whenever a null result is reported, so that the next reader
 > can see what was never looked at.
+
+> ### ✎ CORRECTION C21 — 2026-08-26 · the ranking half of R6 was a property of one corpus
+>
+> R6 made two claims of different kinds and the write-up presented them together.
+> One was an intervention with controls: holding the layer-0 MLP in fp16 rescues
+> the element-wise arm, exempting other blocks does not, and the same exemption
+> on either sibling does nothing. The other was a rank correlation: across five
+> models, the count of annihilated layers orders the roster by per-tensor damage.
+>
+> LIMITATIONS §21 flagged the second as weak at the time it was written — five
+> points, one of them 258× more damaged than the next and therefore supplying
+> most of the apparent correlation. That was the right worry and it was not
+> enough, because the claim still went into §5.4 alongside the causal result.
+>
+> `data/code_python.txt` settled it. On FineWeb-Edu the count reproduces the
+> damage ordering at 90%, 95% and 99%. On Python source it reproduces it at **no
+> threshold at all**: head-wise picks up annihilated layers (1 → 3) while
+> remaining the least damaged model by a factor of five, and GPT-2 and Qwen3
+> swap. `python -m analysis.corpora` prints both rows side by side.
+>
+> The localisation went the other way and got stronger — 25.9× row dispersion at
+> the layer-0 tensor against 1.5–2.2× on both siblings, and a **3265×** damage
+> reduction from exempting three modules against 530× on web text.
+>
+> The lesson is about kinds of evidence rather than about this statistic. **An
+> intervention with controls on one model and a rank correlation over five
+> models are not the same claim and should not share a paragraph.** The first
+> survived a domain shift; the second was never tested against one until now.
+> Related: C20, where a null result over two projections was written up as a
+> statement about the whole network. Both are the same error — letting the shape
+> of the evidence be flattened by the confidence of the prose.
 
 ---
 

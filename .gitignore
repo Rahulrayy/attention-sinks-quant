@@ -1,6 +1,8 @@
 # runs/ is gitignored EXCEPT the committed results: the summary CSVs, the
 # figures the README embeds (a gitignored figure is a broken image on GitHub),
-# and the diagnostic JSONs that a headline claim in README §5.4 rests on.
+# and the diagnostic and distribution JSONs that the headline claims in
+# README §5.4 rest on. Both are small (~360 KB each set) and neither is
+# regenerable without the checkpoints and an hour of GPU time.
 runs/*
 !runs/results/
 runs/results/*
@@ -9,6 +11,9 @@ runs/results/*
 !runs/diag/
 runs/diag/*
 !runs/diag/*.json
+!runs/dist/
+runs/dist/*
+!runs/dist/*.json
 
 # data/ IS committed. The corpus swap moved the headline by ~5x, so the exact
 # document set is part of the result, not an input that can be regenerated.

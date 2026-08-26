@@ -32,6 +32,7 @@ standard §6 imposes on metric changes, applied to the plan itself.
 | C17 | §6, §11 | The Day-2 gate **cannot tell a broken detector from a genuinely sink-free model** — it aborted on the gated arm, turning the project's best positive finding into a crash | **Would have hidden a result** |
 | C16 | §9 | **No Qwen checkpoint in the roster has a BOS token.** Trap §9.4's cross-model BOS protocol is unexecutable as written | Kills an axis |
 | C19 | §6, §7 | **The repo CLI never reproduced the committed cells.** `quant/evaluate.py` tokenized the corpus line-by-line while the scratchpad driver that produced all 200 cells read it as one string. Same bytes, same tokenizer, different held-out slice — streams diverge at token 846. Surfaced as a 0.06–0.76% `ppl_ref` shift that looked like noise | **Silently incomparable cells** |
+| C20 | §7 | **"Not in the projections I tested" was written up as "distributed across the network."** Two failed localisation attempts (`q_proj`, `o_proj`) were read as evidence of a diffuse cause. The damage is in fact localised to **three modules** — the layer-0 MLP — and exempting them recovers a 530× improvement | **Retracted an inference, not a measurement** |
 
 Findings that are *results* rather than corrections are marked **✎ RESULT**:
 [C12](#c12) (early preview on GPT-2), [R1](#r1) (the gated trio is sink-free),
@@ -545,6 +546,7 @@ attention-sinks-quant/
 │   ├── patch.py               # wraps nn.Linear; toggles W/A quant; fp16 exception list
 │   ├── calibrate.py           # activation range collection
 │   ├── diagnose.py            # splits a cell into W / A / static / dynamic / per-token
+│   ├── distributions.py       # per-layer row dispersion + underflow → runs/dist/ (R6)
 │   └── evaluate.py            # ppl → runs/quant/<config>.json; --grid walks the sweep
 ├── train/
 │   ├── attention.py           # ALL arm-specific code lives here, nowhere else
@@ -555,12 +557,13 @@ attention-sinks-quant/
 │   ├── aggregate.py           # runs/**/*.json → one long-format dataframe
 │   ├── stats.py               # paired bootstrap CIs
 │   ├── report.py              # the README's result tables, generated not typed
+│   ├── distributions.py       # the R6 tables, joined to the damage they explain
 │   └── figures.py             # every figure in the README
 ├── tests/
 │   ├── test_fakequant.py      # ← see §9, this one is load-bearing
 │   ├── test_grid.py           # sweep resumability + the tokenization contract (C19)
 │   └── test_softmax1.py       # verifies the scaling identity from §5
-└── runs/                      # gitignored except results/ and diag/
+└── runs/                      # gitignored except results/, diag/ and dist/
 ```
 
 **Design rules:**
@@ -600,6 +603,38 @@ attention-sinks-quant/
 > The general lesson is the one this project keeps relearning: **a number that
 > moves by less than a percent is the dangerous kind.** A 5× discrepancy gets
 > investigated; a 0.4% one gets attributed to the GPU.
+
+> ### ✎ CORRECTION C20 — 2026-08-26 · two failed searches were written up as an absence
+>
+> R4 established that the element-wise arm is destroyed by per-tensor 8-bit
+> activation quantization, and tried to localise the cause. Two exemptions were
+> run: `q_proj`, which carries the fused gate, and `o_proj`, which consumes the
+> gated output. Neither rescued the model. README §5.4 concluded that the damage
+> was therefore **"distributed across the network, not concentrated in the gate
+> path"**, and HANDOFF §3 carried the same sentence.
+>
+> The measurements were right. The inference was not. Two failed localisation
+> attempts establish that the damage is not in *those two projections* — they
+> say nothing whatever about whether it is localised somewhere else, and both
+> candidates had been chosen from one hypothesis about the gate. When that
+> hypothesis died, its search space was mistaken for the whole space.
+>
+> It is localised, and severely. `quant/distributions.py` measures per-layer row
+> dispersion — the one property per-tensor and per-token scaling differ over —
+> and flags the layer-0 MLP input at **28.4×** against **1.6×** on both sibling
+> checkpoints, with 99.26% of its entries rounding to zero under a shared 8-bit
+> scale. Holding that one MLP in fp16 — **three modules of 196** — moves the arm
+> from +3481.54 to +6.57, a **530×** reduction, while the same exemption on the
+> two siblings does nothing and exempting eight *other* blocks' MLPs (24 modules)
+> changes almost nothing. Full writeup in README §5.4.
+>
+> This one cost nothing but a wrong sentence in two documents, because the
+> conclusion it guarded — that the fragility is real, activation-side, and not a
+> calibration artifact — never depended on it. The lesson is narrower and worth
+> stating anyway: **"I looked in two places and it wasn't there" is a fact about
+> the search, not about the thing.** The write-up rule that follows is to name
+> the search space whenever a null result is reported, so that the next reader
+> can see what was never looked at.
 
 ---
 

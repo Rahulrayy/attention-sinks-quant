@@ -35,7 +35,11 @@ that differ by a single boolean in `config.json`:
    quantization destroys**: Δppl **+3600** against an unquantized perplexity of
    14.5, while the ungated baseline it is meant to improve on takes +18.5 and
    the head-wise arm takes +2.2. Holding the sink in fp16 does not rescue it,
-   and the damage is not sink-attributable at all.
+   and the damage is not sink-attributable at all. It is instead **one tensor**
+   — the layer-0 MLP input, whose row-magnitude dispersion the element-wise gate
+   raises 18× above both siblings, annihilating 99.3% of it under any shared
+   scale. Holding that single MLP in fp16 (three modules of 196) takes the model
+   from 241× its reference perplexity back to 1.45×. See §5.4.
 
 Reporting any one of these alone would mislead. The first says the fix works,
 the second says it is unnecessary, the third says the best-known variant of it
@@ -283,16 +287,106 @@ gate included, 168 layers quantized instead of 196 — tests that directly:
 Exempting the gate projection changes nothing — the model is destroyed either
 way, and the static arm is marginally *worse* for it. Exempting `o_proj`
 recovers ~10%, which on a model at 235× its reference perplexity is not a
-rescue. So the damage is **distributed across the network, not concentrated in
-the gate path**, and the amplification story above is wrong as stated.
+rescue. So the damage is **not in the gate path**, and the amplification story
+above is wrong as stated.
 
-What is established: the fragility is activation-side, specific to sharing one
-scale across a tensor, not caused by calibration clipping, and not localised to
-either projection that touches the gate. **The mechanism is open.** The most
-likely remaining explanation is that training with an element-wise gate reshapes
-the activation distribution network-wide into something per-tensor scaling
-cannot represent — which would need a per-layer distributional comparison
-against the baseline to establish, and is not claimed here.
+That much was in the previous version of this section, which then inferred that
+the damage must be *distributed across the network*. It does not follow, and it
+is false — the inference is retracted as **C20**. The damage is localised. It
+was simply not in either projection that had been tested.
+
+#### Resolved: one tensor, at layer 0
+
+Per-tensor and per-token scaling differ in exactly one thing — whether the scale
+is shared across token rows. Same rounding, same clamp, same bit width. So the
+entire gap between the two arms has to be expressible as a property of how
+magnitude is distributed across rows, and `quant/distributions.py` measures that
+directly on every layer's input while quantizing nothing:
+
+- **row dispersion** = `amax(tensor) / median row amax`. The factor by which one
+  shared scale is too coarse for a typical token — precisely the quantity
+  per-token scaling divides out, and 1.0 when per-token buys nothing.
+- **underflow** = the fraction of entries that round to zero, computed under
+  each granularity's own scale.
+
+A layer is called **annihilated** when a shared scale rounds more than 90% of
+its input to zero. Ranked by the damage the statistic has to explain:
+
+| model | Δppl per-tensor | Δppl per-token | median underflow, per-tensor | per-token | annihilated layers | blocks | first block |
+|---|---|---|---|---|---|---|---|
+| `1B_headwise` | +1.30 | +0.39 | 0.187 | 0.085 | 1/196 | 1/28 | 27 |
+| GPT-2 small | +6.35 | +0.27 | 0.110 | 0.050 | 1/48 | 1/12 | 2 |
+| Qwen3-0.6B-Base | +9.67 | +0.57 | 0.169 | 0.109 | 3/196 | 3/28 | 2 |
+| `1B_baseline` | +13.47 | +0.68 | 0.193 | 0.104 | 10/196 | 6/28 | 2 |
+| `1B_elementwise` | **+3481.54** | +0.68 | 0.366 | 0.139 | 15/196 | 9/28 | **0** |
+
+**The control is the load-bearing column.** Counted under *per-token* scales the
+same models give 1, 0, 0, 0, 0 annihilated layers — flat, and flat is what it
+must be, because per-token damage is nearly free across the whole roster. A
+statistic that tracked the per-tensor spread *and* the per-token non-spread
+would be measuring the checkpoint rather than the granularity, and would explain
+nothing. This one is granularity-specific by construction and in the data.
+
+But the count only ranks; it does not scale. Element-wise has 1.5× the
+baseline's annihilated layers and takes **258×** the damage, and its *worst*
+layer is far milder than the baseline's (dispersion 43 against 1538). Depth is
+what separates them — element-wise is the only model in the roster whose
+annihilated blocks start at **layer 0** and run unbroken to layer 7. At the head
+of that run sits the tensor feeding `gate_proj` and `up_proj`, the two branches
+of the layer-0 SwiGLU, which share one input:
+
+| model | row dispersion | eff. bits (median row) | underflow per-tensor | underflow per-token |
+|---|---|---|---|---|
+| Qwen3-0.6B | 1.4× | 7.48 | 0.1181 | 0.0851 |
+| 1B baseline (ungated) | 1.6× | 7.33 | 0.0957 | 0.0681 |
+| 1B head-wise (+0.1%) | 1.6× | 7.28 | 0.0705 | 0.0343 |
+| **1B element-wise (+12%)** | **28.4×** | **3.16** | **0.9926** | 0.4620 |
+
+One boolean in `config.json` separates the last row from the two above it. Under
+a shared 8-bit scale that tensor loses **99.26%** of its entries to rounding,
+against 9.6% for the ungated baseline — the median token is left with 3.2 of its
+8 bits. Under per-row scales the same tensor loses 46%: elevated, survivable,
+and the reason per-token stays at +0.68 on the same checkpoint.
+
+**The causal test.** `--skip-modules` holds named projections in fp16, so the
+claim can be run rather than argued. Every row is `a_only_dynamic`, the arm that
+cannot clip:
+
+| model | left in fp16 | modules | Δppl | ppl / ppl_ref |
+|---|---|---|---|---|
+| `1B_elementwise` | nothing *(control)* | 0/196 | +3481.54 | 241× |
+| `1B_elementwise` | blocks **8–15** MLP | 24/196 | +3342.39 | 232× |
+| `1B_elementwise` | block **0** MLP | **3/196** | **+6.57** | **1.45×** |
+| `1B_elementwise` | blocks 0–3 MLP | 12/196 | +6.39 | 1.44× |
+| `1B_elementwise` | blocks 0–7 MLP | 24/196 | +1.45 | 1.10× |
+| `1B_baseline` | block 0 MLP | 3/196 | +12.96 | 1.88× *(control: +13.47)* |
+| `1B_headwise` | block 0 MLP | 3/196 | +1.36 | 1.09× *(control: +1.30)* |
+
+**Three modules — 1.5% of the quantized layers — take the element-wise arm from
+241× its reference perplexity to 1.45×, a 530× reduction in damage.** The
+specificity is what makes it a result rather than a coincidence: exempting eight
+*other* blocks' MLPs, twenty-four modules instead of three, changes almost
+nothing (+3342); and the same three-module exemption on the two sibling
+checkpoints does nothing at all — the baseline moves 3.8% and head-wise not at
+all. The intervention only works on the model the distributional measurement
+flagged, at the layer it flagged.
+
+**What is now established.** The element-wise arm's per-tensor catastrophe is
+not distributed, not in the gate path, and not a calibration artifact. It is one
+tensor: the layer-0 MLP input, whose row-magnitude dispersion the element-wise
+gate raises 18× above both siblings, annihilating it under any shared scale.
+Because it sits at block 0, all 28 blocks then process the wreckage — which is
+how a single tensor produces +3482 rather than a few points.
+
+**What is not.** *Why* training with an element-wise gate reshapes that
+particular tensor is unexplained; this locates the failure without accounting
+for its origin. And the ranking half of the finding is weaker than the causal
+half: `python -m analysis.distributions --sweep` shows the annihilated-layer
+count reproduces the roster ordering at thresholds of 90%, 95% and 99% and
+**fails** at 50% and 70%, where head-wise — many partially-underflowing layers,
+none annihilated — overtakes models that are more damaged. Partial underflow is
+survivable and near-total underflow is not, so the count is a threshold effect
+rather than a dose, and five models cannot establish more than an ordering.
 
 ### 5.5 Bit width: where the redundancy starts to give
 

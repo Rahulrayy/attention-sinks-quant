@@ -1,0 +1,59 @@
+{
+  "model": "gated_1b_elementwise",
+  "bits": 8,
+  "ppl_ref": 14.47735645757423,
+  "seq_len": 256,
+  "calib_tokens": 2048,
+  "eval_tokens": 8192,
+  "calib_seed": 0,
+  "corpus": "C:\\Users\\rahul\\OneDrive\\Desktop\\LEIDEN SEM 2\\PERSONAL\\attention\\data\\fineweb_edu.txt",
+  "corpus_sha256": "9c8501c905092716",
+  "holdout_sha": "f47598e844632875",
+  "skip_modules": [
+    "layers.0.mlp",
+    "layers.1.mlp",
+    "layers.2.mlp",
+    "layers.3.mlp",
+    "layers.4.mlp",
+    "layers.5.mlp",
+    "layers.6.mlp",
+    "layers.7.mlp"
+  ],
+  "arms": [
+    {
+      "arm": "a_only_dynamic",
+      "n_patched": 172,
+      "n_calibrated": 0,
+      "ppl_quant": 15.924914337938455,
+      "delta_ppl": 1.4475578803642257,
+      "skip_modules": [
+        "layers.0.mlp",
+        "layers.1.mlp",
+        "layers.2.mlp",
+        "layers.3.mlp",
+        "layers.4.mlp",
+        "layers.5.mlp",
+        "layers.6.mlp",
+        "layers.7.mlp"
+      ]
+    },
+    {
+      "arm": "a_only_static",
+      "n_patched": 172,
+      "n_calibrated": 172,
+      "ppl_quant": 16.544346422777846,
+      "delta_ppl": 2.066989965203616,
+      "skip_modules": [
+        "layers.0.mlp",
+        "layers.1.mlp",
+        "layers.2.mlp",
+        "layers.3.mlp",
+        "layers.4.mlp",
+        "layers.5.mlp",
+        "layers.6.mlp",
+        "layers.7.mlp"
+      ]
+    }
+  ],
+  "coverage": null
+}

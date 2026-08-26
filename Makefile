@@ -7,7 +7,7 @@ MODELS := gated_1b_baseline gated_1b_headwise gated_1b_elementwise qwen3_0.6b_ba
 SEEDS  := 0 1 2 3 4
 ARMS   := baseline softmax1 gated
 
-.PHONY: test gate measure quant train figs repro clean
+.PHONY: test gate measure quant dist train figs repro clean
 
 ## The Day 3 hard gate. Nothing downstream is valid until this passes.
 gate:
@@ -49,12 +49,20 @@ train:
 	  done; \
 	done
 
+## Track A: per-layer activation shape (R6). Quantizes nothing, so it needs no
+## gate and costs one holdout pass per checkpoint.
+dist:
+	@for m in $(MODELS); do \
+	  $(PY) -m quant.distributions --model $$m --bits 8 || exit 1; \
+	done
+	$(PY) -m analysis.distributions
+
 figs:
 	$(PY) -m analysis.aggregate
 	$(PY) -m analysis.figures
 
 ## Full reproduction. See README for expected runtime and hardware.
-repro: gate measure quant train figs
+repro: gate measure quant dist train figs
 
 clean:
 	rm -rf runs/sinks/* runs/quant/* runs/train/*

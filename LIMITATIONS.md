@@ -284,3 +284,41 @@ were confirmed to be on the same held-out slice (C19).
 *token stream*, and two cells are comparable only if it matches. The corpus
 hash cannot do that job — a changed reader produces a different token stream
 from byte-identical input.
+
+### 21. The layer-0 localisation is causal; the ranking statistic across models is not
+README §5.4 makes two claims of different strength and they should not be read
+as one.
+
+The **causal** claim is strong. Holding the layer-0 MLP in fp16 moves the
+element-wise arm from +3481.54 to +6.57 (530×) while the same exemption on both
+sibling checkpoints does nothing and a 24-module exemption of other blocks
+changes almost nothing. That is an intervention with its own controls, on one
+model, and it stands on its own.
+
+The **ranking** claim is weak. "Annihilated-layer count orders the roster by
+per-tensor damage" rests on **five models**, one of which (element-wise) is
+258× more damaged than the next and therefore carries most of the apparent
+correlation on its own. Five points cannot distinguish a mechanism from a
+coincidence that happens to sort correctly, and no significance is claimed for
+it anywhere.
+
+It is also threshold-dependent in a way worth stating plainly.
+`python -m analysis.distributions --sweep` prints the count at 50%, 70%, 90%,
+95% and 99%; the ordering holds at **90% and above** and **fails at 50% and
+70%**, where head-wise — many partially-underflowing layers, none annihilated —
+outranks models that are far more damaged. The honest reading is that partial
+underflow is survivable and near-total underflow is not, so this is a threshold
+effect rather than a dose-response, and the count is a *detector* of the failure
+rather than a measure of its size.
+
+What is not explained at all is **why** an element-wise output gate reshapes
+that particular tensor during training. The measurement locates the failure and
+says nothing about its origin. Establishing that would need training-time
+evidence — checkpoints over the course of a run — which this project does not
+have and which its de-scoping section (Track B) already ruled out.
+
+Finally, all of it is one bit width (8) on one corpus. The dispersion statistic
+is bit-width-dependent by construction: `eff_bits` and both underflow fractions
+are computed against a specific integer grid, so the layer-0 tensor's 99.26%
+underflow is an 8-bit number and the 6- and 4-bit equivalents have not been
+measured. §18 applies here as everywhere else.

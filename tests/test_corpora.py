@@ -153,3 +153,48 @@ def test_localisation_distinguishes_a_small_recovery_from_a_large_one(tmp_path):
     assert "1.33× better" in text
     assert "1500× better" in text
     assert "1× better" not in text
+
+
+# --- the bit-width stability report (R5, C22) --------------------------------
+
+def test_bitwidth_survivors_name_the_models_not_a_count():
+    """R5's claim is "the single exception is head-wise", so the table has to
+    name survivors rather than count them -- a count of 1 on each corpus would
+    hide that they can be *different* models, and naming them is what made the
+    destroyed-status flip visible."""
+    from analysis.corpora import bitwidth_stability
+
+    # ppl_ref 10: dppl 5 -> 1.5x (survives), dppl 200 -> 21x (destroyed).
+    alive = cells_from({"gated_1b_headwise": ([1.0] * 8, [0.9] * 8, 10.0)})
+    dead = cells_from({"gated_1b_headwise": ([1.0] * 8, [0.9] * 8, 10.0)})
+    for k in alive:
+        alive[k] = {**alive[k], "ppl_quant": 15.0, "delta_ppl": 5.0}
+    for k in dead:
+        dead[k] = {**dead[k], "ppl_quant": 210.0, "delta_ppl": 200.0}
+
+    text = bitwidth_stability(alive, dead, label_a="A", label_b="B", widths=(8,))
+    assert "headwise" in text
+    assert "**none**" in text
+
+
+def test_bitwidth_growth_is_a_magnitude_not_a_signed_ratio():
+    """Per-token `D_sink` changes sign between corpora (§5.7), so an 8->6 growth
+    computed on signed values would come back negative and read as shrinkage.
+    The report divides magnitudes."""
+    from analysis.corpora import bitwidth_stability
+
+    cells = {}
+    for bits, (none_seq, exc_seq) in ((8, ([1.0] * 8, [1.01] * 8)),
+                                      (6, ([1.0] * 8, [1.1] * 8))):
+        for gran in ("per_tensor", "per_token"):
+            for exc, seqs in (("none", none_seq), ("position_0", exc_seq)):
+                cells[("m", bits, gran, exc, 0)] = {
+                    "quantized_means": {"per_seq_all": list(seqs),
+                                        "nll_all": sum(seqs) / len(seqs)},
+                    "delta_ppl": 1.0, "ppl_ref": 10.0, "ppl_quant": 11.0,
+                }
+
+    text = bitwidth_stability(cells, cells, label_a="A", label_b="B", widths=(8, 6))
+    # D_sink is -0.01 at 8 bits and -0.10 at 6: a 10x growth in magnitude.
+    assert "10.0×" in text
+    assert "-10" not in text

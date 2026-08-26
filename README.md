@@ -419,13 +419,13 @@ rather than omitted:
 ![Figure 2 — bit-width dependence](runs/results/fig2_bitwidth.png)
 
 **The redundancy weakens, and it weakens unevenly.** Going from 8 to 6 bits,
-sink-attributable damage under per-token scaling grows **3–4×** on GPT-2 and
-Qwen3 — crossing from indistinguishable-from-zero to distinguishable on GPT-2 —
-and **115×** on the element-wise arm, the same arm that fails everywhere else in
-this audit. It does *not* grow on the controlled pair: `1B_baseline` falls back
-across zero (its interval widening rather than moving) and `1B_headwise` stays
-at zero. Three of five checkpoints exclude zero at 6 bits against two of five at
-8 bits.
+sink-attributable damage under per-token scaling grows **3.4×** on GPT-2 and
+**4.0×** on Qwen3 — crossing from indistinguishable-from-zero to distinguishable
+on GPT-2 — and **111×** on the element-wise arm, the same arm that fails
+everywhere else in this audit. It does *not* grow on the controlled pair:
+`1B_baseline` falls back across zero (its interval widening rather than moving)
+and `1B_headwise` stays at zero. Three of five checkpoints exclude zero at 6
+bits against two of five at 8 bits.
 
 So the answer is *qualified rather than clean*. Per-token scaling's absorption of
 sink damage is **not bit-width invariant** — but the arms that carry the
@@ -434,18 +434,56 @@ effect, so this does not rescue the mitigation claim. It says the redundancy
 result is an 8-bit result, and that the margin is thinner at 6.
 
 **Per-tensor quantization does not survive to 6 bits at all.** Four of five
-models are destroyed (Δppl +1200 to +128000). The single exception is
-`1B_headwise` at +112 — degraded by 8.7×, and the only checkpoint still on the
-board. So the architectural fix does buy something real and large in the low-bit
-per-tensor regime. It buys it in a setting nobody deploys, and the **+0.1%**
-variant is the one that buys it while the **+12%** variant is 1100× worse.
+models are destroyed (Δppl +1200 to +128000). **On FineWeb-Edu** the single
+exception is `1B_headwise` at +112 — degraded by 8.7×, and the only checkpoint
+still on the board; on the code corpus that cell crosses the line too and
+nothing survives at all (below). The corpus qualifier is load-bearing and was
+not in the original sentence. What holds on both is the rest: the architectural
+fix buys something real and large in the low-bit per-tensor regime, it buys it
+in a setting nobody deploys, and the **+0.1%** variant is the one that buys it
+while the **+12%** variant is three orders of magnitude worse.
 
-That "single exception" is the one claim in this README sensitive to where the
-destroyed-model line is drawn: head-wise sits at 8.7× against a 10× threshold,
-so a threshold of 5× would flag it too and the sentence would become "no model
-survives". The two-orders-of-magnitude gap to the next-best arm is unaffected
-either way. `python -m analysis.report --threshold-sweep` prints the full
-sensitivity; the reasoning behind 10× is in `HANDOFF.md` §12.
+#### On a second corpus, only half of this survives
+
+Everything above is FineWeb-Edu. §5.7 establishes that this project's
+*interventional* claims travel and its *ordering* claims may not, and R5 is
+entirely the second kind — numbers read off a grid, with no intervention behind
+them. The code corpus was run at 6 and 4 bits for exactly that reason.
+`python -m analysis.corpora --bitwidth` generates all of the following.
+
+| R5's sentence | FineWeb-Edu | code | |
+|---|---|---|---|
+| 8→6 per-token growth, GPT-2 | 3.4× | 3.8× | **holds** |
+| 8→6 per-token growth, Qwen3 | 4.0× | 17.1× | **no** |
+| 8→6 per-token growth, element-wise | 111× | 13.0× | **no** |
+| "does not grow on the controlled pair" | baseline 0.5×, head-wise flat | baseline **1.6×**, head-wise flat | **half** |
+| per-token intervals excluding zero, 8→6 | 2/5 → 3/5 | 3/5 → **3/5** | **no** |
+| per-tensor survivors at 6 bits | head-wise, alone | **none** | **no** |
+| per-tensor survivors at 4 bits | none | none | **holds** |
+| least-damaged under per-tensor, 8 and 6 bits | head-wise, 5× and 11× clear | head-wise, 5× and 5× clear | **holds** |
+
+**The direction travels; the thresholds and the growth rates do not.** Head-wise
+is the least-damaged model under per-tensor at both 8 and 6 bits on both
+corpora, by a clear margin every time — that is R5's substantive claim and it is
+intact. What does not survive is the sentence quoted above about the *single
+exception*: on code, head-wise's 6-bit per-tensor cell sits at **12.4×** its
+reference against **8.7×** on web, so it crosses the destroyed line and **no
+model survives per-tensor at 6 bits**. That is the only destroyed-status flip
+anywhere between the two corpora, at any width.
+
+This was predicted. `HANDOFF.md` §12 named that cell as the one borderline
+result in the repo and said that a stricter threshold would turn "the single
+exception being head-wise" into "no model survives", while leaving the direction
+untouched. A corpus change did what a threshold change would have done — which
+is a useful thing to know about that threshold, and the reason the paragraph
+above now carries the corpus it is true of. Filed as **C22**, together with a
+smaller error the same check caught: the 115× element-wise growth figure was
+really **111×**, computed by dividing two values that had already been rounded
+to four decimals.
+
+The threshold's own sensitivity is unchanged and still worth reading:
+`python -m analysis.report --threshold-sweep` prints it, and the reasoning
+behind 10× is in `HANDOFF.md` §12.
 
 ### 5.6 Negative and null results
 

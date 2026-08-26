@@ -1,9 +1,9 @@
 # Handoff — Attention Sinks and Quantization: An Audit
 
-**Date:** 26 August 2026 (second session)
-**State:** Track A complete across three bit widths, has an answer, its one open
-mechanism closed, and its largest unbounded sensitivity now bounded on a second
-corpus — which retracted half of one finding. Track B not started.
+**Date:** 26 August 2026 (third session)
+**State:** Track A complete. Every finding has now been checked on a second
+corpus at all three bit widths. Two claims were retracted or qualified by that
+check (C21, C22) and the rest strengthened. Track B not started.
 **Authoritative sources:** `attention-sinks-quant-plan.md` §0 (corrections log), `LIMITATIONS.md`, `README.md`, `runs/results/`
 **Numbers:** every result table in the README is generated — `analysis.report` (§5.1–5.5), `analysis.distributions` (§5.4), `analysis.corpora` (§5.7). Do not transcribe them by hand — that is how the README came to carry superseded figures for five days (C19 has the story).
 
@@ -13,19 +13,27 @@ corpus — which retracted half of one finding. Track B not started.
 
 | | |
 |---|---|
-| Tests | **155 passing**, 14 files |
+| Tests | **157 passing**, 14 files |
 | Track A code (`sinks/`, `quant/`, `analysis/`) | **complete** — 0 stubs |
 | Track B code (`train/`) | **~15%** — 9 stubs, unchanged |
-| Quantization grid | **300 cells** at 8/6/4-bit on FineWeb-Edu, **+20** at 8-bit on the code corpus (+200 archived on the old corpus) |
+| Quantization grid | **300 cells** at 8/6/4-bit on FineWeb-Edu, **+60** at 8/6/4-bit on the code corpus (+200 archived on the old corpus) |
 | Corpora | **3** committed — FineWeb-Edu (current), Python source (second-corpus arm), in-repo markdown (archived) |
 | Diagnostic runs | **23** — 14 web + 9 code, arm decomposition plus localisation tests |
 | Distribution runs | **10** — 5 per corpus, one per checkpoint |
 | Sink measurement runs | **5** — one per checkpoint, draw 0, no-BOS |
-| Corrections to the original plan | **21** |
+| Corrections to the original plan | **22** |
 | Limitations recorded | **21** |
 | Git | initialised 2026-08-25; the project was never a repository before |
 
 ### Done since the previous handoff
+
+- **R5 corpus-checked at 6 and 4 bits** (§3), the previous handoff's priority 1.
+  40 more cells. Its *direction* claims travel; its thresholds and growth rates
+  do not — **C22**.
+- **`analysis.corpora --bitwidth`** — one printed number per sentence of README
+  §5.5, so each can be checked rather than believed.
+
+### Done in the session before that
 
 - **R7 — the second corpus** (§3), which was the previous handoff's own
   priority 1 and the project's largest unbounded sensitivity. 1.2M characters of
@@ -42,7 +50,7 @@ corpus — which retracted half of one finding. Track B not started.
 - **`data/fetch_code.py`** — the second-corpus fetch, every parameter held
   identical to `fetch_fineweb.py` so domain is the only thing that differs.
 
-### Done in the session before that
+### Done earlier still
 
 - **R6 — the mechanism R4 left open is closed** (§3). The element-wise arm's
   per-tensor catastrophe is **one tensor**: the layer-0 MLP input, at 28.4× row
@@ -227,14 +235,47 @@ nothing here rescues the mitigation claim — the arms carrying the controlled
 comparison are the ones that do not show the effect.
 
 **Per-tensor does not survive to 6 bits at all.** Four of five destroyed (Δppl
-+1200 to +128000). The exception is `1B_headwise` at **+112** — the +0.1%
-variant, while the +12% variant sits at +127610, **1100× worse**. The
-architectural fix buys something real and large in the low-bit per-tensor
-regime; it buys it in a setting nobody deploys.
++1200 to +128000). **On FineWeb-Edu** the exception is `1B_headwise` at
+**+112** — the +0.1% variant, while the +12% variant sits at +127610. On code
+that cell is destroyed too and nothing survives (see below). The architectural
+fix buys something real and large in the low-bit per-tensor regime; it buys it
+in a setting nobody deploys.
 
-**4-bit answers nothing.** Every cell is destroyed under *both* granularities,
-so the apparent per-token `D_sink` there ranks nothing. This is why 6-bit was
-needed and why the last handoff was right to name it.
+**4-bit answers nothing.** Every cell is destroyed under *both* granularities on
+*both* corpora, so the apparent per-token `D_sink` there ranks nothing.
+
+#### R5 on the second corpus — C22
+
+Run because C21 established that this project's ordering claims may not travel
+and R5 is entirely ordering claims. `python -m analysis.corpora --bitwidth`.
+
+| R5's sentence | web | code | |
+|---|---|---|---|
+| 8→6 per-token growth, GPT-2 | 3.4× | 3.8× | **holds** |
+| 8→6 per-token growth, Qwen3 | 4.0× | 17.1× | **no** |
+| 8→6 per-token growth, element-wise | 111× | 13.0× | **no** |
+| "does not grow on the controlled pair" | baseline 0.5× | baseline **1.6×** | **half** |
+| per-token intervals excluding zero, 8→6 | 2/5 → 3/5 | 3/5 → **3/5** | **no** |
+| per-tensor survivors at 6 bits | head-wise, alone | **none** | **no** |
+| per-tensor survivors at 4 bits | none | none | **holds** |
+| least-damaged per-tensor, 8 and 6 bits | head-wise, clear | head-wise, clear | **holds** |
+
+**The direction travels; the thresholds and growth rates do not.** Head-wise is
+the least-damaged model under per-tensor at 8 and 6 bits on both corpora, by a
+clear margin every time — R5's substantive claim, intact. The "single exception"
+sentence is not: head-wise's 6-bit per-tensor cell sits at **12.4×** its
+reference on code against **8.7×** on web, crossing the destroyed line. It is
+the **only** destroyed-status flip between the two grids at any width.
+
+§12 predicted exactly this cell and said a stricter threshold would force the
+sentence to change while leaving the direction alone. A corpus change did what a
+threshold change would have. A result sitting 13% from a threshold is not robust
+to anything that moves it 13%.
+
+C22 also fixes a smaller error the same check caught: R5's **115×** element-wise
+growth is really **111.4×**. It was computed by dividing 0.1036 by 0.0009 — two
+values already rounded to four decimals for display. C19's lesson at small
+scale: arithmetic on a table cell is not arithmetic on data.
 
 ### R6 — the element-wise catastrophe is one tensor, at layer 0
 
@@ -351,7 +392,7 @@ project root, not a subfolder layout).
 | `analysis/figures.py` | 251 | done | Figure 1, bit-width figure; zero-crossing hollow, destroyed cells hatched |
 | `analysis/report.py` | 192 | done | The README's tables; per-width and per-bit-width views |
 | `analysis/distributions.py` | 308 | done | R6 tables joined to the damage they explain; `--sweep` finds the thresholds where the ranking fails |
-| `analysis/corpora.py` | 317 | done | Cross-corpus join; computes a per-claim stability verdict rather than asserting one (R7, C21) |
+| `analysis/corpora.py` | 396 | done | Cross-corpus join; per-claim stability verdicts computed rather than asserted, and `--bitwidth` maps every sentence of §5.5 to a number (R7, C21, C22) |
 | `train/attention.py` | 82 | **partial** | `softmax1` and `OutputGate` work; `CausalSelfAttention` stubbed |
 | `train/model.py` | 28 | **stub** | nanoGPT-ish decoder — contract only |
 | `train/data.py` | 18 | **stub** | 16k BPE + streaming uint16 memmap — contract only |
@@ -438,7 +479,7 @@ document set and therefore a different experiment (LIMITATIONS §18).
 
 ## 7. Corrections ledger
 
-Twenty-one corrections to the original plan, every one established by running code
+Twenty-two corrections to the original plan, every one established by running code
 rather than by rethinking. All annotated in place in
 `attention-sinks-quant-plan.md` §0 with the original text preserved.
 
@@ -469,6 +510,8 @@ method or budget · **LOW** = confirmed or improved.
 | **C20** | **MED** | **"Not in the two projections I tested" was written up as "distributed across the network."** The damage is localised to three modules — the layer-0 MLP — and exempting them buys 530×. The measurements were right; the inference was not |
 
 | **C21** | **HIGH** | **R6's cross-model ranking did not survive a second corpus.** Orders the roster at three thresholds on FineWeb-Edu and at **none** on Python source. The causal half of R6 reproduced and strengthened. Five models with one 258× outlier were never enough |
+
+| **C22** | **MED** | **R5's "single exception" was corpus-dependent, and its 115× was a rounding artefact.** Head-wise's 6-bit per-tensor cell survives on FineWeb-Edu (8.7×) and is destroyed on code (12.4×) — the only destroyed-status flip between the two grids. The 8→6 element-wise growth was 111×, not 115×: two 4-decimal display values divided |
 
 C12 is filed as a *result*, not a correction.
 
@@ -542,7 +585,7 @@ written before any code ran; 7–17 came from experiment; 18–20 from this sess
 | `runs/quant_repo_corpus/` | 200 | **Archived.** Same grid on the in-repo corpus. Kept deliberately — R3 vs R3-rev rests on it |
 | `runs/diag/` | 14 | Arm decomposition per model, plus the `q_proj` / `o_proj` and layer-0 MLP localisation runs (R6) |
 | `runs/dist/` | 5 | Per-layer activation shape at 8 bits, one per checkpoint. What R6 rests on |
-| `runs/quant_code/` | 20 | **The second-corpus arm.** 8-bit, both granularities, `none`/`position_0`, draw 0 |
+| `runs/quant_code/` | 60 | **The second-corpus arm.** 8/6/4-bit, both granularities, `none`/`position_0`, draw 0 |
 | `runs/diag_code/` | 9 | Arm decomposition and the layer-0 localisation, re-run on code |
 | `runs/dist_code/` | 5 | Activation shape on code. R7's stability check |
 | `runs/results/` | 5 | `summary.csv`, `d_sink.csv`, `sinks_summary.csv`, and the two figures |
@@ -589,6 +632,15 @@ gitignored figure is a broken image in the README, and `runs/diag/` and
   it ranks nothing. This was flagged at 4 bits and missed at 8, where it had
   already invalidated a headline comparison. `is_destroyed` now enforces it.
 - **A sub-1% discrepancy is the dangerous kind** (C19). Investigate it.
+- **A result sitting close to a threshold is not robust to anything that moves
+  it by that much** (C22). §12 flagged head-wise's 6-bit cell at 8.7× against a
+  10× line and predicted a threshold change would break the sentence. A
+  *corpus* change broke it instead. When you document a result as
+  threshold-fragile, treat it as fragile to everything, not just to the
+  threshold.
+- **Do arithmetic on the data, not on the rendered table** (C22, C19). R5's
+  "115×" was 0.1036/0.0009 read off a 4-decimal table; the real ratio is
+  111.4×. If a ratio is worth quoting it is worth computing in the generator.
 - **An intervention with controls and a rank correlation are not the same
   claim, and must not share a paragraph** (C21). R6 reported both together;
   the second corpus killed one and strengthened the other. Before writing a
@@ -619,46 +671,36 @@ gitignored figure is a broken image in the README, and `runs/diag/` and
 
 ## 11. Next steps, in priority order
 
-### 1. The code corpus at 6 and 4 bits
+### 1. R6 at 6 and 4 bits
 
-**A second corpus is done** (§3, R7) — this replaces the previous handoff's
-priority 1, which is answered. What replaced it is narrower and follows directly
-from how the arm was scoped: the code grid is **8-bit only**, so every
-conclusion in README §5.5 about *bit width* — the redundancy weakening at 6
-bits, per-tensor not surviving below 8, head-wise being the lone exception at
-+112 — rests on FineWeb-Edu alone and has never been corpus-checked.
-
-That matters more than it would have before R7, because R7 established that
-what travels and what does not is not predictable from the finding's size. R5's
-bit-width claims are the same *kind* of evidence as the ranking that C21
-retracted: an ordering across models, read off a grid, with no intervention
-behind it.
-
-One command per checkpoint, and the machinery is all in place:
+**The code corpus at 6 and 4 bits is done** (§3, C22) — that was the previous
+priority 1 and it is answered. What is left of the bit-width axis is the R6
+statistic itself: `dispersion`, `eff_bits` and both underflow fractions are
+computed against a specific integer grid, so every R6 number is an **8-bit**
+number on **both** corpora.
 
 ```bash
-python -m quant.evaluate --model <m> --grid --bits-list 6,4 \
-    --granularities per_tensor,per_token --exceptions none,position_0 --seeds 0 \
-    --seq-len 256 --calib-tokens 2048 --eval-tokens 8192 \
-    --text-file data/code_python.txt --out runs/quant_code
-python -m analysis.corpora --bits 6
+python -m quant.distributions --model <m> --bits 6                       # web
+python -m quant.distributions --model <m> --bits 6     --text-file data/code_python.txt --out runs/dist_code                # code
 ```
 
-Expect most per-tensor cells to come back destroyed on both corpora; the
-question is whether the *per-token* column degrades at the same rate.
+The question it answers: is the layer-0 tensor still where element-wise dies at
+6 bits, where per-tensor destroys **all five** models on code? The causal test
+(`quant.diagnose --skip-modules layers.0.mlp --bits 6`) is the half worth
+running — C21 and C22 between them establish that on this project the
+interventional half is what travels.
 
-### 2. R6 at 6 and 4 bits
+Cheap: distributions quantize nothing, so it is one holdout pass per checkpoint
+per corpus.
 
-Cheap and bounded, and it pairs with item 1. `dispersion`, `eff_bits` and both
-underflow fractions are computed against a specific integer grid, so every R6
-number is an *8-bit* number on both corpora.
-`python -m quant.distributions --model <m> --bits 6` is one command per
-checkpoint and would say whether the layer-0 tensor is still the story at 6
-bits, where per-tensor destroys four of five models anyway (§3, R5).
+### 2. LAMBADA, or one downstream task
 
-The mechanism question that is genuinely open is upstream and out of reach here:
-*why* training with an element-wise gate reshapes that tensor. That needs
-checkpoints over the course of a run, which this project does not have.
+Promoted from 4. The plan calls for one cheap downstream task and perplexity is
+still the only measurement here. It matters more after C21/C22 than it did
+before: three of the five things those corrections touched were *orderings of
+perplexity damage*, and a second, differently-shaped metric is the cheapest
+independent check on whether those orderings mean anything. "Which arm is
+broken" is a live question, not a formality.
 
 ### 3. The `detected_sinks` and `outlier_channels` arms
 
@@ -675,17 +717,11 @@ exception does not touch that axis, so it should *not* rescue the layer-0
 tensor. If it does, R6's account of which axis matters is wrong, and that is
 worth knowing.
 
-### 4. LAMBADA
-
-The plan calls for one cheap downstream task. Perplexity alone cannot
-distinguish "slightly worse everywhere" from "broken on the cases that matter" —
-and given §3, "which arm is broken" is now a live question rather than a
-formality.
-
-### 5. Track B, or cut it
+### 4. Track B, or cut it
 
 The plan's own de-scoping section says cut Track B first and ship the
-inference-only audit. Track A now has three defensible findings, so that option
+inference-only audit. Track A now has six findings, two corpora and its own
+retractions on file, so that option
 is live and legitimate. If Track B does happen, `softmax1` is the arm worth the
 compute — widely cited, never evaluated with seeds — and the scaling identity is
 already implemented and tested.

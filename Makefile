@@ -57,11 +57,13 @@ dist:
 	done
 	$(PY) -m analysis.distributions
 
-## The second-corpus arm (R7). 8-bit only; --text-file is the only difference,
-## and the provenance fields keep the two grids distinguishable.
+## The second-corpus arm (R7, C21, C22). All three widths for the grid;
+## diagnose and distributions are 8-bit only, which LIMITATIONS §21 records.
+## --text-file is the only difference from the `quant` target, and the
+## provenance fields (corpus_sha256, holdout_sha) keep the grids distinguishable.
 corpus: gate
 	@for m in $(MODELS); do \
-	  $(PY) -m quant.evaluate --model $$m --grid --bits-list 8 \
+	  $(PY) -m quant.evaluate --model $$m --grid --bits-list 8,6,4 \
 	    --granularities per_tensor,per_token --exceptions none,position_0 --seeds 0 \
 	    --seq-len 256 --calib-tokens 2048 --eval-tokens 8192 \
 	    --text-file data/code_python.txt --out runs/quant_code || exit 1; \
@@ -71,6 +73,7 @@ corpus: gate
 	    --text-file data/code_python.txt --out runs/dist_code || exit 1; \
 	done
 	$(PY) -m analysis.corpora
+	$(PY) -m analysis.corpora --bitwidth
 
 figs:
 	$(PY) -m analysis.aggregate

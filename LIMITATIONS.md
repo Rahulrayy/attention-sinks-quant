@@ -239,6 +239,10 @@ the first time, and the bound is uneven — the point of §5.7 and of
 | R4, element-wise destroyed | **yes, worse** — 1003× its reference vs 257× |
 | R6 localisation (layer-0 MLP, causal) | **yes, stronger** — 3265× vs 530× from three modules |
 | R6 cross-model ranking (correlational) | **no** — orders the roster at no threshold (**C21**) |
+| R5 direction (head-wise least damaged, 8 and 6 bits) | **yes** — clear margin on both |
+| R5 "per-tensor survives at 6 bits on head-wise alone" | **no** — nothing survives on code (**C22**) |
+| R5 8→6 per-token growth rates | **no** — reproduce on GPT-2 only |
+| R5 "4-bit answers nothing" | **yes** — everything destroyed on both |
 
 The pattern is not that "everything held" or "everything moved". Interventions
 with controls held; a rank correlation over five models did not. That is the
@@ -247,9 +251,9 @@ correction rather than a caveat.
 
 **What is still unbounded.** Three corpora, all English, all 1.2M characters,
 all read whole-file at seq_len 256. Nothing here speaks to other languages,
-much longer contexts, or genuinely adversarial input. And the code arm is
-**8-bit only** — the 6- and 4-bit grids exist on FineWeb-Edu alone, so §5.5's
-bit-width conclusions have not been corpus-checked at all.
+much longer contexts, or genuinely adversarial input. The code arm now covers
+8, 6 and 4 bits, so §5.5 is corpus-checked; the R6 *statistic* is still 8-bit
+only on both corpora (§21).
 
 All three corpora are committed under `data/` with hashes, so the grids remain
 distinguishable and re-checkable. Re-streaming any of them gives a different
@@ -272,6 +276,15 @@ The 6-bit grid was run to put a width in between, where the model still works
 What remains unbounded is everything below 6 bits: nothing here establishes
 where the redundancy stops, only that it is intact at 8, weakening at 6, and
 unmeasurable by this metric at 4.
+
+**6 bits is narrower than it looked, and on the second corpus it is narrower
+still.** C22: on Python source, per-tensor at 6 bits destroys **all five**
+models, head-wise included — the FineWeb-Edu grid's one survivor sits at 8.7×
+its reference and the same cell on code sits at 12.4×. So the interpretable
+window for per-tensor is 8 bits on both corpora and nothing below it on either.
+Per-token stays interpretable at 6 on both. The 8→6 *growth rates* quoted in
+§5.5 reproduce on GPT-2 alone; treat them as one corpus's numbers, not as a
+measured rate of decay.
 
 ### 20. The held-out slice is 32 sequences
 Every cell was measured with **8192 held-out tokens and 2048 tokens per

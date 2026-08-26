@@ -187,6 +187,115 @@ def verdict(cells_a, cells_b, *, label_a: str, label_b: str,
     return "\n".join(lines)
 
 
+def bitwidth_stability(cells_a, cells_b, *, label_a: str, label_b: str,
+                       widths=(8, 6, 4), seed: int = 0) -> str:
+    """R5's bit-width claims, one printed number per sentence, on both corpora.
+
+    R5 was written as prose against a single corpus, and C21 established that
+    exactly this kind of claim — an ordering read off a grid, with no
+    intervention behind it — is the kind that does not travel. Each block below
+    corresponds to a sentence in README §5.5 so the sentence can be checked
+    rather than believed.
+
+    The per-tensor block reports **survivors** rather than damage, because that
+    is the form R5's claim takes ("per-tensor does not survive to 6 bits, the
+    single exception being head-wise"). A survivor is a cell at or below 10× its
+    own reference — `analysis.figures.DESTROYED_PPL_RATIO`, whose sensitivity
+    HANDOFF §12 already documents, and whose borderline cell is precisely the
+    head-wise one this table is about.
+    """
+    def table(cells, bits):
+        return rows(cells, bits=bits, seed=seed)
+
+    out = [f"R5's bit-width claims on both corpora, draw {seed}.", ""]
+
+    # 1. "The redundancy weakens": per-token |D_sink| and its 8 -> 6 growth.
+    # The growth column needs two widths to exist; with one, the table is still
+    # worth printing and the column is simply absent rather than a crash.
+    pair = widths[:2]
+    wide, narrow = (pair[0], pair[1]) if len(pair) > 1 else (pair[0], None)
+    growth_hdr = f" | {wide}→{narrow} {label_a} | {wide}→{narrow} {label_b}" if narrow else ""
+    out += [f"**Per-token `D_sink`"
+            + (f", and how it grows from {wide} to {narrow} bits.**" if narrow else ".**")
+            + " A magnitude, because the sign is not stable (§5.7).", "",
+            "| model | " + " | ".join(f"{b}b {lbl}" for b in pair
+                                      for lbl in (label_a, label_b))
+            + growth_hdr + " |",
+            "|---" * (1 + 2 * len(pair) + (2 if narrow else 0)) + "|"]
+    for r in table(cells_a, wide):
+        m = r["model"]
+        vals = {(lbl, b): _dsink(table(cells, b), m, "per_token")
+                for lbl, cells in ((label_a, cells_a), (label_b, cells_b))
+                for b in pair}
+        cols = []
+        for b in pair:
+            for lbl in (label_a, label_b):
+                iv = vals[(lbl, b)]
+                cols.append("—" if iv is None else
+                            f"{abs(iv.point):.4f}" + ("*" if iv.crosses_zero else ""))
+        if narrow:
+            for lbl in (label_a, label_b):
+                hi, lo = vals[(lbl, narrow)], vals[(lbl, wide)]
+                # Magnitudes, not signed values: per-token D_sink changes sign
+                # between corpora (§5.7), and a signed ratio would report a
+                # doubling of damage as a negative "shrinkage".
+                cols.append("—" if not hi or not lo or lo.point == 0
+                            else f"{abs(hi.point) / abs(lo.point):.1f}×")
+        out.append(f"| `{m}` | " + " | ".join(cols) + " |")
+    out += ["", "`*` = the interval contains zero, so the magnitude is an upper "
+                "bound on something indistinguishable from no effect."]
+
+    # 2. "N of five exclude zero at 6 bits against M of five at 8."
+    out += ["", "**How many per-token intervals exclude zero**, which is the "
+                "form R5's weakening claim takes.", "",
+            "| corpus | " + " | ".join(f"{b}-bit" for b in widths) + " |",
+            "|---" * (len(widths) + 1) + "|"]
+    for lbl, cells in ((label_a, cells_a), (label_b, cells_b)):
+        cols = []
+        for b in widths:
+            t = table(cells, b)
+            ivs = [r["per_token"] for r in t if r.get("per_token")]
+            cols.append(f"{sum(1 for iv in ivs if not iv.crosses_zero)}/{len(ivs)}")
+        out.append(f"| {lbl} | " + " | ".join(cols) + " |")
+
+    # 3. "Per-tensor does not survive to 6 bits, the exception being head-wise."
+    out += ["", "**Which models survive per-tensor**, i.e. sit at or below 10× "
+                "their own reference. This is the sentence C21's lesson applies "
+                "to most directly.", "",
+            "| corpus | " + " | ".join(f"{b}-bit" for b in widths) + " |",
+            "|---" * (len(widths) + 1) + "|"]
+    for lbl, cells in ((label_a, cells_a), (label_b, cells_b)):
+        cols = []
+        for b in widths:
+            alive = [r["model"] for r in table(cells, b)
+                     if r.get("per_tensor_dppl") is not None
+                     and not r.get("per_tensor_destroyed")]
+            cols.append(", ".join(x.replace("gated_1b_", "") for x in alive) or "**none**")
+        out.append(f"| {lbl} | " + " | ".join(cols) + " |")
+
+    # 4. The direction, which is a different claim from the survivor count.
+    out += ["", "**Least-damaged model under per-tensor**, per width. The "
+                "*direction* is a separate claim from the survivor count above, "
+                "and the two do not have to travel together.", "",
+            "| corpus | " + " | ".join(f"{b}-bit" for b in widths) + " |",
+            "|---" * (len(widths) + 1) + "|"]
+    for lbl, cells in ((label_a, cells_a), (label_b, cells_b)):
+        cols = []
+        for b in widths:
+            t = [r for r in table(cells, b) if r.get("per_tensor_dppl") is not None]
+            if not t:
+                cols.append("—")
+                continue
+            best = min(t, key=lambda r: r["per_tensor_dppl"])
+            others = [r["per_tensor_dppl"] for r in t if r is not best]
+            margin = (min(others) / best["per_tensor_dppl"]) if others and best[
+                "per_tensor_dppl"] > 0 else float("nan")
+            cols.append(f"{best['model'].replace('gated_1b_', '')} "
+                        f"(+{best['per_tensor_dppl']:.2f}, {margin:.0f}× better than next)")
+        out.append(f"| {lbl} | " + " | ".join(cols) + " |")
+    return "\n".join(out)
+
+
 def r6_markdown(dist_a, diag_a, dist_b, diag_b, *, label_a: str, label_b: str,
                 layer: str = "model.layers.0.mlp.gate_proj",
                 threshold: float = ANNIHILATED) -> str:
@@ -297,11 +406,18 @@ def main() -> None:
     parser.add_argument("--diag-a", default="runs/diag")
     parser.add_argument("--diag-b", default="runs/diag_code")
     parser.add_argument("--bits", type=int, default=8)
+    parser.add_argument("--bitwidth", action="store_true",
+                        help="R5's bit-width claims on both corpora (README §5.5)")
     parser.add_argument("--seed", type=int, default=0)
     ns = parser.parse_args()
 
     ca, cb = load_cells(ns.root_a), load_cells(ns.root_b)
     kw = dict(label_a=ns.label_a, label_b=ns.label_b, bits=ns.bits, seed=ns.seed)
+
+    if ns.bitwidth:
+        print(bitwidth_stability(ca, cb, label_a=ns.label_a, label_b=ns.label_b,
+                                 seed=ns.seed))
+        return
 
     print(dsink_markdown(ca, cb, **kw)); print()
     print(damage_markdown(ca, cb, **kw)); print()

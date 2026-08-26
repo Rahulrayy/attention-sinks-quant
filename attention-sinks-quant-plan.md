@@ -34,6 +34,7 @@ standard §6 imposes on metric changes, applied to the plan itself.
 | C19 | §6, §7 | **The repo CLI never reproduced the committed cells.** `quant/evaluate.py` tokenized the corpus line-by-line while the scratchpad driver that produced all 200 cells read it as one string. Same bytes, same tokenizer, different held-out slice — streams diverge at token 846. Surfaced as a 0.06–0.76% `ppl_ref` shift that looked like noise | **Silently incomparable cells** |
 | C20 | §7 | **"Not in the projections I tested" was written up as "distributed across the network."** Two failed localisation attempts (`q_proj`, `o_proj`) were read as evidence of a diffuse cause. The damage is in fact localised to **three modules** — the layer-0 MLP — and exempting them recovers a 530× improvement | **Retracted an inference, not a measurement** |
 | C21 | §6, §7 | **R6's cross-model ranking did not survive a second corpus.** "Annihilated-layer count orders the roster by per-tensor damage" holds on FineWeb-Edu at three thresholds and on Python source at **none**. Five models with one 258× outlier were never enough to tell a mechanism from a lucky sort. The *causal* half of R6 reproduced and strengthened | **Retracts half a finding** |
+| C22 | §6 | **R5's "single exception" was corpus-dependent, and its 115× was a rounding artefact.** Head-wise's 6-bit per-tensor cell sits at 8.7× its reference on FineWeb-Edu and **12.4×** on code, so it survives on one corpus and is destroyed on the other — the only destroyed-status flip anywhere between the two grids. The element-wise 8→6 growth figure was 111×, not 115×: two 4-decimal display values were divided. R5's *direction* claims travel; its thresholds and growth rates do not | **Qualifies a claim, fixes a number** |
 
 Findings that are *results* rather than corrections are marked **✎ RESULT**:
 [C12](#c12) (early preview on GPT-2), [R1](#r1) (the gated trio is sink-free),
@@ -667,6 +668,43 @@ attention-sinks-quant/
 > Related: C20, where a null result over two projections was written up as a
 > statement about the whole network. Both are the same error — letting the shape
 > of the evidence be flattened by the confidence of the prose.
+
+> ### ✎ CORRECTION C22 — 2026-08-26 · R5's thresholds did not travel, and one of its ratios was rounded twice
+>
+> C21 established that this project's interventional claims survive a change of
+> corpus and its ordering claims may not. R5 — the bit-width section — is
+> entirely the second kind: every sentence in it is a number read off a grid,
+> with no intervention behind it. So the code corpus was run at 6 and 4 bits to
+> test it, and `analysis.corpora --bitwidth` was written so each sentence maps
+> to a printed number rather than to prose.
+>
+> **What travelled.** Head-wise is the least-damaged model under per-tensor at
+> both 8 and 6 bits on both corpora, by a clear margin every time. The 8→6
+> per-token growth on GPT-2 reproduces (3.4× → 3.8×). Nothing survives per-tensor
+> at 4 bits on either corpus. Those are R5's substantive claims and they hold.
+>
+> **What did not.** "Per-tensor does not survive to 6 bits, the single exception
+> being head-wise at +112" is a FineWeb-Edu sentence. On code that cell sits at
+> **12.4×** its own reference against **8.7×** on web, crosses the 10× destroyed
+> line, and **no model survives**. It is the only destroyed-status flip between
+> the two grids at any width. Also gone: the 8→6 growth rates on Qwen3
+> (4.0× → 17.1×) and element-wise (111× → 13×), and "three of five exclude zero
+> at 6 against two of five at 8", which is 3/5 at both widths on code.
+>
+> **The prediction that was already on file.** HANDOFF §12 named that exact cell
+> as the single borderline result in the repo, and said that at a threshold of
+> 5× or lower the sentence "would have to change" while the direction stayed
+> untouched. That is what happened — except a corpus change did it rather than a
+> threshold change. A result sitting 13% from a threshold is not robust to
+> *anything* that moves it 13%, and the corpus is one such thing. The sentence
+> now carries the corpus it is true of.
+>
+> **And a small one, same check.** R5's "115×" growth on the element-wise arm is
+> **111.4×**. It was computed as 0.1036 / 0.0009 — two values already rounded to
+> four decimals for display, divided as if they were the measurements. The
+> underlying numbers are 0.10357 and 0.00093. This is C19's lesson at small
+> scale: the rounded thing on the page is not the thing that was measured, and
+> arithmetic on a table cell is not arithmetic on data.
 
 ---
 

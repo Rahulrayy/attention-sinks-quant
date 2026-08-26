@@ -143,3 +143,40 @@ def test_localisation_marks_the_unexempted_run_as_the_control(tmp_path):
     text = localisation(str(root))
     assert "(control)" in text
     assert "536× better" in text
+
+
+# --- the axis table (C23) ----------------------------------------------------
+
+def test_axis_table_picks_the_worst_layer_by_per_tensor_underflow(tmp_path):
+    """The row has to describe the layer the damage actually lives in, which is
+    the one a shared scale annihilates -- not the one with the largest
+    dispersion on some other axis."""
+    from analysis.distributions import axis_markdown
+
+    dist, diag = tmp_path / "dist", tmp_path / "diag"
+    write_dist(dist, "m", {
+        "model.layers.1.mlp.up_proj": {**layer(0.20), "col_dispersion": 9000.0,
+                                       "underflow_col": 0.01},
+        "model.layers.7.mlp.up_proj": {**layer(0.99), "col_dispersion": 12.0,
+                                       "underflow_col": 0.02},
+    })
+    write_diag(diag, "m", 42.0)
+
+    text = axis_markdown(load_dist(str(dist)), load_diag(str(diag)))
+    assert "`L7.mlp.up_proj`" in text
+    assert "L1.mlp.up_proj" not in text
+
+
+def test_axis_table_survives_runs_written_before_the_col_fields_existed(tmp_path):
+    """`runs/dist*` JSONs predate the feature-axis statistic. A report that
+    crashed or printed a bare 0 on them would silently misdescribe the older
+    grids rather than saying the measurement is absent."""
+    from analysis.distributions import axis_markdown
+
+    dist, diag = tmp_path / "dist", tmp_path / "diag"
+    write_dist(dist, "m", {"model.layers.0.mlp.up_proj": layer(0.99)})  # no col_*
+    write_diag(diag, "m", 42.0)
+
+    text = axis_markdown(load_dist(str(dist)), load_diag(str(diag)))
+    assert "—" in text
+    assert "0.0000" not in text

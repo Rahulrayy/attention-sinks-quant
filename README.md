@@ -339,18 +339,37 @@ annihilated blocks start at **layer 0** and run unbroken to layer 7. At the head
 of that run sits the tensor feeding `gate_proj` and `up_proj`, the two branches
 of the layer-0 SwiGLU, which share one input:
 
-| model | row dispersion | eff. bits (median row) | underflow per-tensor | underflow per-token |
-|---|---|---|---|---|
-| Qwen3-0.6B | 1.4× | 7.48 | 0.1181 | 0.0851 |
-| 1B baseline (ungated) | 1.6× | 7.33 | 0.0957 | 0.0681 |
-| 1B head-wise (+0.1%) | 1.6× | 7.28 | 0.0705 | 0.0343 |
-| **1B element-wise (+12%)** | **28.4×** | **3.16** | **0.9926** | 0.4620 |
+| model | row dispersion | col dispersion | underflow per-tensor | per-token | per-feature |
+|---|---|---|---|---|---|
+| Qwen3-0.6B | 1.4× | 10.6× | 0.1181 | 0.0851 | 0.0107 |
+| 1B baseline (ungated) | 1.6× | 8.5× | 0.0957 | 0.0681 | 0.0109 |
+| 1B head-wise (+0.1%) | 1.6× | 5.9× | 0.0705 | 0.0343 | 0.0113 |
+| **1B element-wise (+12%)** | **28.4×** | **304.0×** | **0.9926** | 0.4620 | 0.0107 |
 
 One boolean in `config.json` separates the last row from the two above it. Under
 a shared 8-bit scale that tensor loses **99.26%** of its entries to rounding,
-against 9.6% for the ungated baseline — the median token is left with 3.2 of its
-8 bits. Under per-row scales the same tensor loses 46%: elevated, survivable,
-and the reason per-token stays at +0.68 on the same checkpoint.
+against 9.6% for the ungated baseline. Under per-row scales the same tensor
+loses 46%: elevated, survivable, and the reason per-token stays at +0.68 on the
+same checkpoint.
+
+**Which axis this is, and which it is not (C23).** An earlier version of this
+section reported only the row column and called the failure *row* dispersion, on
+the reasoning that row dispersion is precisely what per-token scaling divides
+out. The reasoning is valid; the description was not checked against the
+transposed statistic, and when it was, it did not hold. The gate raises **both**
+axes far above both siblings and raises the **feature** axis more — 36–52×
+against 18×. Nor does the feature axis separate the roster: it is the more
+dispersed axis at *every* model's worst layer, head-wise (the least damaged
+model here) included at 248.9×, and per-feature underflow sits at 0.01–0.06
+everywhere regardless of damage.
+
+So the discriminating statistic is the per-tensor column and only that, which is
+what the rest of this section rests on. What is retracted is the tidy mechanism
+around it: per-token is *sufficient* — the grid shows that directly — but not
+because it addresses the dominant axis. It takes this tensor from 99.3%
+underflow to 46%, and 46% at one layer is survivable where 99.3% is not. That
+is a weaker statement than the one it replaces.
+`python -m analysis.distributions --axis` prints the roster.
 
 **The causal test.** `--skip-modules` holds named projections in fp16, so the
 claim can be run rather than argued. Every row is `a_only_dynamic`, the arm that

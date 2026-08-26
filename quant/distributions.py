@@ -35,6 +35,24 @@ property directly:
 
   underflow_token  the same fraction under per-row scales.
 
+  col_dispersion   amax(X) / median_c amax_r |X[:,c]| — the same statistic
+                   transposed onto the feature axis. This is the axis check.
+                   One huge ROW gives dispersion >> 1 and col_dispersion ~ 1;
+                   one huge FEATURE CHANNEL gives the reverse; a single huge
+                   entry inflates both. Per-token scaling divides out row
+                   dispersion and nothing else, so this is what decides whether
+                   per-token is the right fix or merely a fix that happened to
+                   work.
+
+  underflow_col    entries rounding to zero under one scale per feature channel
+                   — the LLM.int8 axis.
+
+**Naming, because this repo already uses the word.** `col_*` here means the
+FEATURE axis. It is *not* `quant.fakequant`'s `per_channel` granularity, which
+reduces over every axis but the first and therefore gives one scale per TOKEN
+when applied to an activation. That collision is real and is why these fields
+are called `col_` rather than `channel_`.
+
 The last pair is the load-bearing one, and it is what makes this a test rather
 than an illustration. `underflow_tensor` blowing up on the element-wise arm is
 only a mechanism if `underflow_token` does NOT — otherwise the finding is
@@ -77,16 +95,19 @@ from .evaluate import (
 from .fakequant import qrange
 
 # Per-call scalars, in the order they are packed into the accumulator row.
+# `col_*` fields are appended rather than interleaved so an older run JSON stays
+# readable: the earlier fields keep their meaning and their position.
 FIELDS = ("amax", "row_amax_median", "row_amax_p99", "rms",
-          "underflow_tensor", "underflow_token")
+          "underflow_tensor", "underflow_token",
+          "col_amax_median", "underflow_col")
 
 
 def _call_stats(x: torch.Tensor, qmax: int) -> torch.Tensor:
-    """The six per-call scalars for one activation tensor, packed into a row.
+    """The per-call scalars for one activation tensor, packed into a row.
 
     Kept on the GPU and stacked at the end rather than ``.item()``-ed here: one
     sync per layer per forward call is thousands of stalls over the holdout, for
-    six numbers that are not read until the pass is over.
+    numbers that are not read until the pass is over.
 
     float32 throughout. Deriving a range in bf16 quantizes the measurement of
     the quantizer, which is the same silent no-op that tests/test_fakequant.py
@@ -96,11 +117,13 @@ def _call_stats(x: torch.Tensor, qmax: int) -> torch.Tensor:
 
     amax = xf.amax()
     row_amax = xf.amax(dim=-1)
+    col_amax = xf.amax(dim=0)
     rms = xf.pow(2).mean().sqrt()
 
     # An entry rounds to zero iff |x| < s/2, for s the scale it is quantized at.
     half_tensor = amax / (2 * qmax)
     half_token = (row_amax / (2 * qmax)).unsqueeze(-1)
+    half_col = (col_amax / (2 * qmax)).unsqueeze(0)
 
     return torch.stack([
         amax,
@@ -109,6 +132,8 @@ def _call_stats(x: torch.Tensor, qmax: int) -> torch.Tensor:
         rms,
         (xf < half_tensor).to(torch.float32).mean(),
         (xf < half_token).to(torch.float32).mean(),
+        col_amax.median(),
+        (xf < half_col).to(torch.float32).mean(),
     ])
 
 
@@ -159,11 +184,21 @@ def collect(model, *, bits: int, batches_fn, device="cuda") -> dict[str, dict]:
         med = table.median(dim=0).values.tolist()
         mean = table.mean(dim=0).tolist()
         s = dict(zip(FIELDS, med))
-        s["underflow_tensor"] = mean[FIELDS.index("underflow_tensor")]
-        s["underflow_token"] = mean[FIELDS.index("underflow_token")]
+        for k in ("underflow_tensor", "underflow_token", "underflow_col"):
+            s[k] = mean[FIELDS.index(k)]
         s["n_calls"] = len(rows)
 
         s["dispersion"] = s["amax"] / s["row_amax_median"] if s["row_amax_median"] > 0 else None
+        # The same statistic transposed. Together the two say WHICH AXIS carries
+        # the tensor's extremes, which is the whole of R6's mechanism claim:
+        # per-token scaling divides out row dispersion and nothing else, so a
+        # tensor that is peaked across rows is one per-token can rescue and a
+        # tensor that is peaked across features is not. One huge row gives
+        # dispersion >> 1 with col_dispersion ~ 1; one huge feature channel
+        # gives the reverse. This is the axis check, not a second opinion.
+        s["col_dispersion"] = (
+            s["amax"] / s["col_amax_median"] if s["col_amax_median"] > 0 else None
+        )
         s["crest"] = s["amax"] / s["rms"] if s["rms"] > 0 else None
         s["eff_bits"] = (
             max(0.0, math.log2(qmax / s["dispersion"]) + 1.0)
@@ -208,6 +243,9 @@ def summarize(layers: dict[str, dict], *, top: int = 8) -> dict:
         "dispersion_max": mx("dispersion"),
         "eff_bits_median": med("eff_bits"),
         "eff_bits_min": mn("eff_bits"),
+        "col_dispersion_median": med("col_dispersion"),
+        "col_dispersion_max": mx("col_dispersion"),
+        "underflow_col_median": med("underflow_col"),
         "crest_median": med("crest"),
         "crest_max": mx("crest"),
         "underflow_tensor_median": med("underflow_tensor"),
@@ -215,9 +253,11 @@ def summarize(layers: dict[str, dict], *, top: int = 8) -> dict:
         "underflow_token_median": med("underflow_token"),
         "underflow_token_max": mx("underflow_token"),
         "worst_layers": [
-            {"layer": k, "dispersion": v["dispersion"], "eff_bits": v["eff_bits"],
+            {"layer": k, "dispersion": v["dispersion"],
+             "col_dispersion": v.get("col_dispersion"), "eff_bits": v["eff_bits"],
              "underflow_tensor": v["underflow_tensor"],
-             "underflow_token": v["underflow_token"]}
+             "underflow_token": v["underflow_token"],
+             "underflow_col": v.get("underflow_col")}
             for k, v in worst[:top]
         ],
     }
@@ -274,13 +314,18 @@ def main() -> None:
     print(f"  eff_bits     median {summary['eff_bits_median']:>10.2f}"
           f"   min {summary['eff_bits_min']:>12.2f}", flush=True)
     print(f"  underflow    per-tensor {summary['underflow_tensor_median']:>7.4f}"
-          f"   per-token {summary['underflow_token_median']:>10.4f}   (median layer)",
+          f"   per-token {summary['underflow_token_median']:>10.4f}"
+          f"   per-feature {summary['underflow_col_median']:>8.4f}   (median layer)",
+          flush=True)
+    print(f"  col disp     median {summary['col_dispersion_median']:>10.2f}"
+          f"   max {summary['col_dispersion_max']:>12.2f}   (the axis check)",
           flush=True)
     for w in summary["worst_layers"][:5]:
-        print(f"      {w['layer']:<44} disp x{w['dispersion']:>10.1f}"
-              f"  eff_bits {w['eff_bits']:>5.2f}"
-              f"  uf_tensor {w['underflow_tensor']:.4f}"
-              f"  uf_token {w['underflow_token']:.4f}", flush=True)
+        print(f"      {w['layer']:<40} disp x{w['dispersion']:>9.1f}"
+              f"  col x{(w['col_dispersion'] or float('nan')):>7.1f}"
+              f"  uf_T {w['underflow_tensor']:.4f}"
+              f"  uf_tok {w['underflow_token']:.4f}"
+              f"  uf_col {(w['underflow_col'] or float('nan')):.4f}", flush=True)
 
     out_dir = Path(ns.out)
     out_dir.mkdir(parents=True, exist_ok=True)

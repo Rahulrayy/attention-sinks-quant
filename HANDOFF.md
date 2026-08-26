@@ -1,9 +1,11 @@
 # Handoff — Attention Sinks and Quantization: An Audit
 
-**Date:** 26 August 2026 (third session)
-**State:** Track A complete. Every finding has now been checked on a second
-corpus at all three bit widths. Two claims were retracted or qualified by that
-check (C21, C22) and the rest strengthened. Track B not started.
+**Date:** 26 August 2026 (fourth session)
+**State:** Track A complete and stress-tested. Every finding checked on a second
+corpus at all three bit widths, and R6's mechanism checked on the axis it was
+attributed to. Four corrections came out of that (C20–C23), all of the same
+kind: the measurements held, the explanations wrapped around them did not.
+Track B not started.
 **Authoritative sources:** `attention-sinks-quant-plan.md` §0 (corrections log), `LIMITATIONS.md`, `README.md`, `runs/results/`
 **Numbers:** every result table in the README is generated — `analysis.report` (§5.1–5.5), `analysis.distributions` (§5.4), `analysis.corpora` (§5.7). Do not transcribe them by hand — that is how the README came to carry superseded figures for five days (C19 has the story).
 
@@ -13,19 +15,34 @@ check (C21, C22) and the rest strengthened. Track B not started.
 
 | | |
 |---|---|
-| Tests | **157 passing**, 14 files |
+| Tests | **163 passing**, 14 files |
 | Track A code (`sinks/`, `quant/`, `analysis/`) | **complete** — 0 stubs |
 | Track B code (`train/`) | **~15%** — 9 stubs, unchanged |
 | Quantization grid | **300 cells** at 8/6/4-bit on FineWeb-Edu, **+60** at 8/6/4-bit on the code corpus (+200 archived on the old corpus) |
 | Corpora | **3** committed — FineWeb-Edu (current), Python source (second-corpus arm), in-repo markdown (archived) |
 | Diagnostic runs | **23** — 14 web + 9 code, arm decomposition plus localisation tests |
-| Distribution runs | **10** — 5 per corpus, one per checkpoint |
+| Distribution runs | **10** — 5 per corpus, re-measured with the feature-axis statistic (C23) |
 | Sink measurement runs | **5** — one per checkpoint, draw 0, no-BOS |
-| Corrections to the original plan | **22** |
+| Corrections to the original plan | **23** |
 | Limitations recorded | **21** |
 | Git | initialised 2026-08-25; the project was never a repository before |
 
 ### Done since the previous handoff
+
+- **C23 — R6's mechanism was attributed to the wrong axis** (§3). The
+  element-wise layer-0 tensor is extreme on *both* axes and **more** so on the
+  feature axis (304× against 28.4×). The feature axis is the more dispersed one
+  on every model in the roster, so it separates nothing. The localisation and
+  its controls are untouched; the explanation around them is corrected.
+- **The axis statistic** — `col_dispersion` and `underflow_col` in
+  `quant/distributions.py`, `analysis.distributions --axis` to report them.
+  All ten distribution runs re-measured; every previously-published number
+  reproduced exactly.
+- **The `outlier_channels` prediction from §11 was tested and failed** — before
+  the intervention was run, on the measurement. That is what the prediction was
+  for.
+
+### Done in the session before that
 
 - **R5 corpus-checked at 6 and 4 bits** (§3), the previous handoff's priority 1.
   40 more cells. Its *direction* claims travel; its thresholds and growth rates
@@ -33,7 +50,7 @@ check (C21, C22) and the rest strengthened. Track B not started.
 - **`analysis.corpora --bitwidth`** — one printed number per sentence of README
   §5.5, so each can be checked rather than believed.
 
-### Done in the session before that
+### Done earlier
 
 - **R7 — the second corpus** (§3), which was the previous handoff's own
   priority 1 and the project's largest unbounded sensitivity. 1.2M characters of
@@ -52,7 +69,7 @@ check (C21, C22) and the rest strengthened. Track B not started.
 
 ### Done earlier still
 
-- **R6 — the mechanism R4 left open is closed** (§3). The element-wise arm's
+- **R6 — the layer-0 localisation** (mechanism claim later corrected by C23) (§3). The element-wise arm's
   per-tensor catastrophe is **one tensor**: the layer-0 MLP input, at 28.4× row
   dispersion against 1.6× on both siblings. Holding three modules in fp16 takes
   it from 241× its reference perplexity to 1.45×, with controls.
@@ -84,9 +101,10 @@ check (C21, C22) and the rest strengthened. Track B not started.
   `OutputGate`; `CausalSelfAttention`, `model.py`, `data.py`, `train.py` are
   contract-only stubs. No pretraining run has happened.
 - **LAMBADA.** The plan calls for one cheap downstream task. Only perplexity.
-- **The `detected_sinks` and `outlier_channels` exception arms.** Implemented
-  and unit-tested, never run in the grid. `--grid --exceptions detected_sinks`
-  now makes this a single command on the sink-bearing models.
+- **The `detected_sinks` and `outlier_channels` exception arms.** Never run in
+  the grid. `detected_sinks` is one command; **`outlier_channels` has no
+  end-to-end path at all** — the CLI never builds an `outlier_mask`, so
+  selecting it raises. Found this session; §11.3.
 - **The code corpus at 6 and 4 bits.** The second-corpus arm is **8-bit only**,
   so §5.5's bit-width conclusions have never been corpus-checked (LIMITATIONS
   §18). This is now the largest open sensitivity.
@@ -287,17 +305,29 @@ directly, quantizing nothing.
 
 The layer-0 MLP input, the tensor feeding both branches of the SwiGLU:
 
-| model | row dispersion | eff. bits (median row) | underflow per-tensor | per-token |
-|---|---|---|---|---|
-| Qwen3-0.6B | 1.4× | 7.48 | 0.1181 | 0.0851 |
-| `1B_baseline` | 1.6× | 7.33 | 0.0957 | 0.0681 |
-| `1B_headwise` | 1.6× | 7.28 | 0.0705 | 0.0343 |
-| **`1B_elementwise`** | **28.4×** | **3.16** | **0.9926** | 0.4620 |
+| model | row disp | col disp | uf per-tensor | per-token | per-feature |
+|---|---|---|---|---|---|
+| Qwen3-0.6B | 1.4× | 10.6× | 0.1181 | 0.0851 | 0.0107 |
+| `1B_baseline` | 1.6× | 8.5× | 0.0957 | 0.0681 | 0.0109 |
+| `1B_headwise` | 1.6× | 5.9× | 0.0705 | 0.0343 | 0.0113 |
+| **`1B_elementwise`** | **28.4×** | **304.0×** | **0.9926** | 0.4620 | 0.0107 |
 
 One boolean separates the last row from the two above it. Under a shared 8-bit
 scale that tensor loses **99.26%** of its entries to rounding against the
 baseline's 9.6%; under per-row scales it loses 46%, which is survivable and is
 why per-token stays at +0.68 on the same checkpoint.
+
+**The axis column is C23 and it corrects this section.** R6 originally reported
+only row dispersion and called the failure row-dispersed, reasoning that row
+dispersion is what per-token divides out. The gate in fact raises **both** axes
+and the feature axis **more** (36–52× against 18×), and the feature axis is the
+more dispersed one at every model's worst layer — head-wise, the least damaged
+model here, sits at 248.9×. Per-feature underflow is 0.01–0.06 everywhere
+regardless of damage. So the feature axis separates nothing and the per-tensor
+column is the only one that tracks the damage. Per-token is *sufficient*, which
+the grid shows directly, but not because it addresses the dominant axis — it
+takes this tensor from 99.3% underflow to 46%, and 46% is survivable where
+99.3% is not. `python -m analysis.distributions --axis`.
 
 **The causal test** (`a_only_dynamic`, the arm that cannot clip):
 
@@ -320,10 +350,12 @@ gives 1, 0, 0, 0, 0 annihilated layers — flat, as it must be, since per-token
 damage is nearly free everywhere. A statistic that moved with both would be
 measuring the checkpoint, not the granularity.
 
-**The cross-model ranking that used to sit here is retracted — C21, R7.** It
-ordered the roster on FineWeb-Edu and orders nothing on code. What survived is
-everything above: the layer-0 tensor and the intervention with its controls.
-*Why* the gate reshapes that tensor in training is still unexplained.
+**Two things that used to sit here are gone.** The cross-model ranking is
+retracted (C21, R7): it ordered the roster on FineWeb-Edu and orders nothing on
+code. The axis attribution is corrected (C23): the tensor is extreme on both
+axes, more so on the feature axis. What survives both is the same thing — the
+layer-0 tensor and the intervention with its controls, on two corpora. *Why*
+the gate reshapes that tensor in training is still unexplained.
 LIMITATIONS §21.
 
 ### R7 — the second corpus, and what it retracted
@@ -386,12 +418,12 @@ project root, not a subfolder layout).
 | `quant/calibrate.py` | 188 | done | Disjoint corpus slicing, batching, BOS policy, static range collection |
 | `quant/evaluate.py` | 619 | done | Per-token NLL, `D_sink` decomposition, `evaluate_cell`, `run_grid`, `--grid` CLI, corpus loading |
 | `quant/diagnose.py` | 246 | done | Arm decomposition, range-coverage table, projection exemption |
-| `quant/distributions.py` | 304 | done | Per-layer row dispersion, effective bits, per-granularity underflow. Quantizes nothing (R6) |
+| `quant/distributions.py` | 330 | done | Per-layer dispersion on **both** axes, effective bits, per-granularity underflow. Quantizes nothing (R6, C23) |
 | `analysis/aggregate.py` | 211 | done | runs/ → dataframes; reconstructs `D_sink`; the comparability guard |
 | `analysis/stats.py` | 165 | done | Paired bootstrap, sequence bootstrap, variance-source reporting |
 | `analysis/figures.py` | 251 | done | Figure 1, bit-width figure; zero-crossing hollow, destroyed cells hatched |
 | `analysis/report.py` | 192 | done | The README's tables; per-width and per-bit-width views |
-| `analysis/distributions.py` | 308 | done | R6 tables joined to the damage they explain; `--sweep` finds the thresholds where the ranking fails |
+| `analysis/distributions.py` | 380 | done | R6 tables joined to the damage they explain; `--sweep` finds the thresholds where the ranking fails, `--axis` reports both dispersion axes (C23) |
 | `analysis/corpora.py` | 396 | done | Cross-corpus join; per-claim stability verdicts computed rather than asserted, and `--bitwidth` maps every sentence of §5.5 to a number (R7, C21, C22) |
 | `train/attention.py` | 82 | **partial** | `softmax1` and `OutputGate` work; `CausalSelfAttention` stubbed |
 | `train/model.py` | 28 | **stub** | nanoGPT-ish decoder — contract only |
@@ -412,7 +444,7 @@ project root, not a subfolder layout).
 | `test_stats.py` | Degenerate-CI failure mode; mismatched seeds rejected |
 | `test_fakequant.py` | **HARD GATE** — the no-op quantizer check |
 | `test_softmax1.py` | The scaling identity `softmax1(x) = s·softmax(x)` |
-| `test_distributions.py` | Dispersion against hand-derived answers; the falsification case (within-row peaking must NOT disperse); `collect` restores the model and leaves no hooks |
+| `test_distributions.py` | Dispersion against hand-derived answers; the falsification case (within-row peaking must NOT disperse); the axis pair discriminates a hot row from a hot feature channel and admits a hot *entry* disperses both; `collect` restores the model and leaves no hooks |
 | `test_dist_report.py` | `--skip-modules` runs excluded from the damage join (a treatment cannot stand in for what it treats); the sweep actually detects a reordering |
 | `test_corpora.py` | The headline reduction refuses a zero-crossing numerator; the ranking check reports "no threshold" when the order inverts, and does not credit an all-zero column |
 
@@ -479,7 +511,7 @@ document set and therefore a different experiment (LIMITATIONS §18).
 
 ## 7. Corrections ledger
 
-Twenty-two corrections to the original plan, every one established by running code
+Twenty-three corrections to the original plan, every one established by running code
 rather than by rethinking. All annotated in place in
 `attention-sinks-quant-plan.md` §0 with the original text preserved.
 
@@ -512,6 +544,8 @@ method or budget · **LOW** = confirmed or improved.
 | **C21** | **HIGH** | **R6's cross-model ranking did not survive a second corpus.** Orders the roster at three thresholds on FineWeb-Edu and at **none** on Python source. The causal half of R6 reproduced and strengthened. Five models with one 258× outlier were never enough |
 
 | **C22** | **MED** | **R5's "single exception" was corpus-dependent, and its 115× was a rounding artefact.** Head-wise's 6-bit per-tensor cell survives on FineWeb-Edu (8.7×) and is destroyed on code (12.4×) — the only destroyed-status flip between the two grids. The 8→6 element-wise growth was 111×, not 115×: two 4-decimal display values divided |
+
+| **C23** | **MED** | **R6's mechanism was attributed to the wrong axis.** The element-wise layer-0 tensor is extreme on *both* axes and more so on the feature axis (304× vs 28.4×); the feature axis is the more dispersed one on every model in the roster and separates nothing. The localisation and its controls are unaffected — what is corrected is the explanation around them |
 
 C12 is filed as a *result*, not a correction.
 
@@ -632,6 +666,12 @@ gitignored figure is a broken image in the README, and `runs/diag/` and
   it ranks nothing. This was flagged at 4 bits and missed at 8, where it had
   already invalidated a headline comparison. `is_destroyed` now enforces it.
 - **A sub-1% discrepancy is the dangerous kind** (C19). Investigate it.
+- **A premise about what a fix *can* address is not a measurement of what the
+  data *is*** (C23). R6 argued correctly that per-token scaling can only
+  divide out row structure, then described the tensor as row-structured
+  without measuring the other axis. The transposed statistic took ten lines
+  and contradicted it. When a mechanism is stated as "X is what matters",
+  measure not-X before writing the sentence.
 - **A result sitting close to a threshold is not robust to anything that moves
   it by that much** (C22). §12 flagged head-wise's 6-bit cell at 8.7× against a
   10× line and predicted a threshold change would break the sentence. A
@@ -704,18 +744,34 @@ broken" is a live question, not a formality.
 
 ### 3. The `detected_sinks` and `outlier_channels` arms
 
-Both implemented and unit-tested, never run. Now one command each:
+`detected_sinks` is one command:
 `--grid --exceptions detected_sinks --sinks-json runs/sinks/<model>_calib0_nobos.json`.
-`outlier_channels` tests a different mechanism (channel-wise, LLM.int8-style)
-and would say whether the redundancy finding generalises past token-wise
-exceptions.
 
-R6 gives `outlier_channels` a prediction to be checked against, which it did not
-have before. The element-wise failure is **row** dispersion — magnitude spread
-across token rows, which is what per-token scaling divides out. A channel-wise
-exception does not touch that axis, so it should *not* rescue the layer-0
-tensor. If it does, R6's account of which axis matters is wrong, and that is
-worth knowing.
+**`outlier_channels` is not, and this is a live finding.** It is implemented in
+`quant/patch.py` and unit-tested, but the `quant.evaluate` CLI **never builds an
+`outlier_mask`** — it wires `sink_mask` from `--sinks-json` and nothing else, so
+the arm raises `ValueError` if selected. `sinks/measure.py` imports
+`outlier_channels` from `sinks.metrics` at line 49 and never calls it. The arm
+has no end-to-end path. Wiring it means recording the outlier mask in the sinks
+JSON (where the design clearly intended it) and reading it back in `evaluate`;
+that implies re-running `sinks.measure` for all five models, which should
+reproduce R1 exactly and must be checked to.
+
+**The prediction that used to be here failed — see C23.** It read: the
+element-wise failure is row dispersion, so a channel-wise exception should not
+rescue the layer-0 tensor. The transposed statistic contradicted it before any
+intervention was run: that tensor is *more* dispersed on the feature axis
+(304×) than on the row axis (28.4×), and per-feature scaling would take its
+underflow to ~1%.
+
+So the live question is now the opposite one, and it is sharper. Per-feature
+underflow is flat and near zero across the **whole roster**, damaged and
+undamaged models alike — which is exactly the shape of a statistic that
+discriminates nothing. If `outlier_channels` nonetheless rescues element-wise
+and only element-wise, something separates that model on the feature axis which
+`underflow_col` does not capture, and the axis story is unfinished. If it
+rescues everything or nothing, the feature axis is confirmed as uninformative
+here and the arm can be reported as a null and closed.
 
 ### 4. Track B, or cut it
 

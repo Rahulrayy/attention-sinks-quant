@@ -168,3 +168,50 @@ def test_summarize_reports_max_alongside_median():
     assert s["dispersion_max"] == pytest.approx(5000.0)
     assert s["eff_bits_min"] == pytest.approx(0.0)
     assert s["worst_layers"][0]["layer"] == "bad"
+
+
+# --- the axis check ----------------------------------------------------------
+
+def test_a_hot_row_disperses_rows_and_not_columns():
+    """One huge ROW. Every column's maximum comes from that row, so every
+    column looks equally large and `col_dispersion` must sit at 1.0 while
+    `dispersion` is enormous. This is the signature per-token scaling fixes."""
+    x = torch.ones(1, 16, 8)
+    x[:, 3, :] = 1000.0
+    s = stats(x)
+    assert s["amax"] / s["row_amax_median"] == pytest.approx(1000.0)
+    assert s["amax"] / s["col_amax_median"] == pytest.approx(1.0)
+
+
+def test_a_hot_column_disperses_columns_and_not_rows():
+    """The transpose. One huge FEATURE CHANNEL: every row's maximum comes from
+    it, so `dispersion` collapses to 1.0 and `col_dispersion` carries the
+    spread. Per-token scaling is powerless here, and the pair of statistics has
+    to say so -- otherwise R6's claim about WHICH axis matters is unfalsifiable."""
+    x = torch.ones(1, 16, 8)
+    x[:, :, 2] = 1000.0
+    s = stats(x)
+    assert s["amax"] / s["row_amax_median"] == pytest.approx(1.0)
+    assert s["amax"] / s["col_amax_median"] == pytest.approx(1000.0)
+
+
+def test_a_single_hot_entry_disperses_both():
+    """One huge ENTRY inflates both axes, and neither per-token nor per-feature
+    scaling rescues the rest of the tensor. The statistics must not pretend to
+    discriminate a case that does not discriminate."""
+    x = torch.ones(1, 16, 8)
+    x[:, 3, 2] = 1000.0
+    s = stats(x)
+    assert s["amax"] / s["row_amax_median"] == pytest.approx(1000.0)
+    assert s["amax"] / s["col_amax_median"] == pytest.approx(1000.0)
+
+
+def test_per_feature_underflow_tracks_the_column_axis():
+    """A hot column annihilates the tensor under one shared scale, is untouched
+    by per-feature scales, and is NOT helped by per-row scales."""
+    x = torch.ones(1, 16, 8)
+    x[:, :, 2] = 1e5
+    s = stats(x)
+    assert s["underflow_tensor"] == pytest.approx(7 / 8)   # every ordinary column dies
+    assert s["underflow_col"] == pytest.approx(0.0)        # per-feature rescues it
+    assert s["underflow_token"] == pytest.approx(7 / 8)    # per-token cannot

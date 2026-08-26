@@ -238,6 +238,7 @@ the first time, and the bound is uneven — the point of §5.7 and of
 | The redundancy (per-token absorbs it) | **yes, more strongly** — max \|`D_sink`\| 0.0117 nats, 3/5 point estimates negative |
 | R4, element-wise destroyed | **yes, worse** — 1003× its reference vs 257× |
 | R6 localisation (layer-0 MLP, causal) | **yes, stronger** — 3265× vs 530× from three modules |
+| R6 axis attribution (row dispersion) | **n/a — wrong on both corpora** (**C23**) |
 | R6 cross-model ranking (correlational) | **no** — orders the roster at no threshold (**C21**) |
 | R5 direction (head-wise least damaged, 8 and 6 bits) | **yes** — clear margin on both |
 | R5 "per-tensor survives at 6 bits on head-wise alone" | **no** — nothing survives on code (**C22**) |
@@ -319,7 +320,7 @@ were confirmed to be on the same held-out slice (C19).
 hash cannot do that job — a changed reader produces a different token stream
 from byte-identical input.
 
-### 21. The layer-0 localisation is causal; the ranking statistic was not, and is retracted
+### 21. The layer-0 localisation is causal; the ranking and the axis story were not
 README §5.4 makes two claims of different strength and they should not be read
 as one.
 
@@ -343,6 +344,23 @@ underflow is survivable and near-total underflow is not — head-wise carries ma
 layers at 50–70% underflow and is the least damaged model on both corpora — so
 the count detects the *kind* of failure without measuring its size or ranking
 models against each other.
+
+**The axis attribution was wrong and is corrected (C23).** This section, and
+README §5.4, originally described the failure as *row* dispersion — reasoning
+that row structure is the only thing per-token scaling can divide out, and
+therefore the only thing that could explain a gap between the two
+granularities. The premise is sound and the description was never checked
+against the transposed statistic. It does not hold: the tensor is extreme on
+**both** axes and more so on the feature axis (304× against 28.4×), and the
+feature axis is the more dispersed one at every model's worst layer in the
+roster — including head-wise, the least damaged model here, at 248.9×.
+Per-feature underflow sits at 0.01–0.06 on damaged and undamaged models alike.
+
+So per-tensor underflow remains the only statistic that tracks the damage, and
+the causal result is untouched. What is gone is the tidy account of *why*
+per-token suffices. It takes that tensor from 99.3% underflow to 46%, not to
+zero; 46% at one layer is survivable and 99.3% is not. That is the honest
+version and it explains less.
 
 What is not explained at all is **why** an element-wise output gate reshapes
 that particular tensor during training. The measurement locates the failure and

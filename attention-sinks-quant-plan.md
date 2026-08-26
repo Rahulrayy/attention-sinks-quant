@@ -35,6 +35,7 @@ standard §6 imposes on metric changes, applied to the plan itself.
 | C20 | §7 | **"Not in the projections I tested" was written up as "distributed across the network."** Two failed localisation attempts (`q_proj`, `o_proj`) were read as evidence of a diffuse cause. The damage is in fact localised to **three modules** — the layer-0 MLP — and exempting them recovers a 530× improvement | **Retracted an inference, not a measurement** |
 | C21 | §6, §7 | **R6's cross-model ranking did not survive a second corpus.** "Annihilated-layer count orders the roster by per-tensor damage" holds on FineWeb-Edu at three thresholds and on Python source at **none**. Five models with one 258× outlier were never enough to tell a mechanism from a lucky sort. The *causal* half of R6 reproduced and strengthened | **Retracts half a finding** |
 | C22 | §6 | **R5's "single exception" was corpus-dependent, and its 115× was a rounding artefact.** Head-wise's 6-bit per-tensor cell sits at 8.7× its reference on FineWeb-Edu and **12.4×** on code, so it survives on one corpus and is destroyed on the other — the only destroyed-status flip anywhere between the two grids. The element-wise 8→6 growth figure was 111×, not 115×: two 4-decimal display values were divided. R5's *direction* claims travel; its thresholds and growth rates do not | **Qualifies a claim, fixes a number** |
+| C23 | §6, §7 | **R6's mechanism was attributed to the wrong axis.** The element-wise layer-0 tensor is extreme on *both* axes — row dispersion 28.4× and **feature dispersion 304×** against 1.6× / 6–9× on its siblings — and the feature axis is the more dispersed one on **every** model in the roster, including the least damaged. Per-feature underflow is flat and near zero everywhere, so it discriminates nothing. The localisation and its controls are unaffected | **Corrects an explanation, not a measurement** |
 
 Findings that are *results* rather than corrections are marked **✎ RESULT**:
 [C12](#c12) (early preview on GPT-2), [R1](#r1) (the gated trio is sink-free),
@@ -705,6 +706,59 @@ attention-sinks-quant/
 > underlying numbers are 0.10357 and 0.00093. This is C19's lesson at small
 > scale: the rounded thing on the page is not the thing that was measured, and
 > arithmetic on a table cell is not arithmetic on data.
+
+> ### ✎ CORRECTION C23 — 2026-08-26 · the mechanism was real, the axis was not
+>
+> R6 reasoned as follows, and the reasoning is valid: per-tensor and per-token
+> scaling differ in exactly one thing — whether the scale is shared across rows
+> — so the gap between the two arms must be expressible as a property of how
+> magnitude is distributed across rows. From that, README §5.4 described the
+> element-wise failure as *row* dispersion, and said per-token scaling "divides
+> out exactly the quantity that matters".
+>
+> The inference from the valid premise to the description was not checked. A
+> premise about what per-token *can* fix is not a measurement of what the tensor
+> *is*. The check was one transposed statistic and it had not been run.
+>
+> HANDOFF §11 had, in the meantime, turned this into a prediction: the
+> `outlier_channels` arm operates on the feature axis, "so it should *not*
+> rescue the layer-0 tensor. If it does, R6's account of which axis matters is
+> wrong, and that is worth knowing." Running the transposed statistic answered
+> that before the intervention was run, and answered it against the prediction.
+>
+> | `layers.0.mlp.gate_proj` | row disp | col disp | uf per-tensor | per-token | per-feature |
+> |---|---|---|---|---|---|
+> | `1B_baseline` | 1.6× | 8.5× | 0.0957 | 0.0681 | 0.0109 |
+> | `1B_headwise` | 1.6× | 5.9× | 0.0705 | 0.0343 | 0.0113 |
+> | `1B_elementwise` | **28.4×** | **304.0×** | **0.9926** | 0.4620 | 0.0107 |
+>
+> The gate raises **both** axes far above both siblings, and raises the feature
+> axis *more* (36–52× against 18×). Across the whole roster the feature axis is
+> the more dispersed one at every model's worst layer — head-wise, the least
+> damaged model in the project, carries a feature dispersion of 249× — so it
+> separates nothing. Per-feature underflow is 0.01–0.06 everywhere, on damaged
+> and undamaged models alike. `python -m analysis.distributions --axis`.
+>
+> **What survives, unchanged.** The localisation: three modules in fp16 take the
+> arm from +3481.54 to +6.57 on web and +6929.49 to +2.12 on code, with the
+> specificity controls and the sibling controls intact. The discriminating
+> statistic: per-tensor underflow, 99.3% against 7–9.6%. Both corpora.
+>
+> **What is corrected.** The tensor is not "row-dispersed"; it is extreme on
+> both axes. And per-token scaling does not divide out the dominant one — it
+> takes that tensor's underflow from 99.3% to 46%, not to zero. Per-token is
+> *sufficient*, which the grid shows directly, but not for the tidy reason §5.4
+> gave. 46% underflow at one layer is survivable and 99.3% is not; that is the
+> whole of it, and it is a weaker and less satisfying statement than the one it
+> replaces.
+>
+> **The pattern, now four deep.** C20 read two failed searches as a statement
+> about the network. C21 let a rank correlation share a paragraph with an
+> intervention. C22 quoted a threshold result without its corpus. C23 described
+> a tensor by what the fix addresses rather than by what was measured. Every one
+> is the same move: the *explanation* ran ahead of the *measurement*, in a
+> project whose entire subject is claims that do that. The measurements have all
+> held. What keeps failing is the sentence wrapped around them.
 
 ---
 

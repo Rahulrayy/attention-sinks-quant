@@ -168,24 +168,76 @@ def layer_table(dist: dict, layer: str, models=None) -> str:
         return f"(no distribution run carries `{layer}`)"
 
     out = [
-        f"`{layer}` across the roster.",
+        f"`{layer}` across the roster, on both axes.",
         "",
-        "| model | row dispersion | eff. bits (median row) | underflow per-tensor "
-        "| underflow per-token |",
-        "|---|---|---|---|---|",
+        "| model | row dispersion | col dispersion | underflow per-tensor "
+        "| per-token | per-feature |",
+        "|---|---|---|---|---|---|",
     ]
     for m in present:
         v = dist[m]["layers"][layer]
+        col = v.get("col_dispersion")
+        ucol = v.get("underflow_col")
         out.append(
             f"| {short(m).replace(chr(10), ' ')} | {v['dispersion']:.1f}× | "
-            f"{v['eff_bits']:.2f} | {v['underflow_tensor']:.4f} | "
-            f"{v['underflow_token']:.4f} |"
+            + (f"{col:.1f}×" if col is not None else "—") + " | "
+            f"{v['underflow_tensor']:.4f} | {v['underflow_token']:.4f} | "
+            + (f"{ucol:.4f}" if ucol is not None else "—") + " |"
         )
     out += [
         "",
-        "*Row dispersion* = amax(tensor) / median row amax: the factor by which "
-        "one shared scale is too coarse for a typical token. It is exactly what "
-        "per-token scaling divides out, and 1.0 means per-token buys nothing.",
+        "*Row dispersion* = amax(tensor) / median row amax — the factor by which "
+        "one shared scale is too coarse for a typical token, and the quantity "
+        "per-token scaling divides out. *Col dispersion* is the same statistic "
+        "on the feature axis. Reporting both is the axis check (C23): a tensor "
+        "peaked across rows is one per-token can rescue; a tensor peaked across "
+        "features is not, and a tensor peaked on both is not evidence for "
+        "either. 1.0 on an axis means scaling along it buys nothing.",
+    ]
+    return "\n".join(out)
+
+
+def axis_markdown(dist: dict, diag: dict, threshold: float = ANNIHILATED) -> str:
+    """Which axis carries each model's worst tensor, against its damage.
+
+    Written for C23. R6 attributed the element-wise failure to row dispersion
+    specifically, on the reasoning that row dispersion is what per-token scaling
+    divides out. That reasoning is sound and the attribution was not: the
+    feature axis turned out to be the *more* dispersed one on every model in the
+    roster, so "this tensor is row-dispersed" was never what the data said.
+
+    The per-feature column is the one to read. It is flat across the roster —
+    per-feature scaling is uniformly excellent and therefore explains nothing —
+    which is exactly the shape of a statistic that does not discriminate, and
+    the reason the per-tensor column remains the one that does.
+    """
+    rows_ = profile(dist, diag, threshold)
+    out = [
+        "Both dispersion axes at each model's worst per-tensor layer, against "
+        "the damage. Rows sorted by damage.",
+        "",
+        "| model | Δppl per-tensor | worst layer | row disp | col disp | "
+        "underflow per-tensor | per-token | per-feature |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    for r in rows_:
+        layers = dist[r["model"]]["layers"]
+        worst = max(layers.items(), key=lambda kv: kv[1].get("underflow_tensor", 0))
+        name, v = worst
+        col, ucol = v.get("col_dispersion"), v.get("underflow_col")
+        out.append(
+            f"| `{r['model']}` | {r['dynamic']:+.2f} | "
+            f"`{name.replace('model.layers.', 'L').replace('transformer.h.', 'h')}` | "
+            f"{v['dispersion']:.1f}× | " + (f"{col:.1f}×" if col is not None else "—")
+            + f" | {v['underflow_tensor']:.4f} | {v['underflow_token']:.4f} | "
+            + (f"{ucol:.4f}" if ucol is not None else "—") + " |"
+        )
+    out += [
+        "",
+        "The feature axis is the more dispersed one on every row, including the "
+        "models that are barely damaged — so it does not separate them. "
+        "Per-feature underflow is likewise flat and near zero everywhere. "
+        "Per-tensor underflow is the column that tracks the damage.",
     ]
     return "\n".join(out)
 
@@ -285,6 +337,8 @@ def main() -> None:
     parser.add_argument("--threshold", type=float, default=ANNIHILATED)
     parser.add_argument("--layer", default="model.layers.0.mlp.gate_proj")
     parser.add_argument("--sweep", action="store_true", help="threshold sensitivity only")
+    parser.add_argument("--axis", action="store_true",
+                        help="which axis carries each worst tensor (C23)")
     ns = parser.parse_args()
 
     dist = load_dist(ns.dist_root, ns.bits)
@@ -295,12 +349,17 @@ def main() -> None:
     if ns.sweep:
         print(sweep(dist, diag))
         return
+    if ns.axis:
+        print(axis_markdown(dist, diag, ns.threshold))
+        return
 
     print(markdown(dist, diag, ns.threshold))
     print()
     print(token_control(dist, diag, ns.threshold))
     print()
     print(layer_table(dist, ns.layer))
+    print()
+    print(axis_markdown(dist, diag, ns.threshold))
     print()
     print(localisation(ns.diag_root, ns.bits))
     print()

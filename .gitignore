@@ -23,6 +23,11 @@ runs/diag*/*
 !runs/dist*/
 runs/dist*/*
 !runs/dist*/*.json
+# LAMBADA (R8, README §5.8). ~1.1 MB, and the per-example 0/1 arrays inside are
+# what make every interval in that section recomputable without a GPU.
+!runs/lambada*/
+runs/lambada*/*
+!runs/lambada*/*.json
 
 # data/ IS committed. The corpus swap moved the headline by ~5x, so the exact
 # document set is part of the result, not an input that can be regenerated.

@@ -373,3 +373,48 @@ bit-width-dependent by construction: `eff_bits` and both underflow fractions are
 computed against a specific integer grid, so the layer-0 tensor's ~99.2%
 underflow is an **8-bit** number and the 6- and 4-bit equivalents have not been
 measured on either corpus.
+
+### 22. LAMBADA is one task, in one language, at one sample size
+The downstream check (README §5.8) is a real second metric and it is not a
+general claim about downstream behaviour.
+
+**One task.** LAMBADA is last-word prediction with a long-range dependency. It
+was chosen because that is the hardest thing a short-context perplexity number
+can hide, and because a published fp16 accuracy exists to validate the protocol
+against — GPT-2 small scores 0.3070 here on 1000 examples against ~0.326
+published on the full 5153, which is the check that the implementation is the
+standard one. Nothing here speaks to summarisation, code, instruction
+following, or any generative task. A quantized model that answers LAMBADA
+correctly can still be degraded in ways this does not touch.
+
+**One language.** English, like all three corpora (§18).
+
+**1000 of 5153 examples**, taken in dataset order and fingerprinted by
+`examples_sha`. `python -m analysis.lambada --power` prints what that buys: the
+half-width of each cell's paired interval, which is the smallest accuracy drop
+the sample could have called non-zero. It runs ±1–3 points. **A cell whose drop
+is smaller than its own resolution is a bound, not a measurement**, and several
+per-token cells are exactly that. They are reported as intervals crossing zero
+rather than as zeroes.
+
+**Accuracy saturates, and perplexity does not.** Once a model is at chance,
+further damage cannot lower its score. This is the accuracy analogue of §19's
+destroyed-cell problem and it bites on the same cells: a model at 241× its
+reference perplexity is at the floor, and the distance between it and a model
+at 8000× is unmeasurable by this metric. Cells at or below 2% accuracy are
+marked `⌊` in the generated table. Read a floored cell as "broken", never as a
+rank.
+
+**The calibration corpus is not the evaluation corpus.** Static per-tensor
+scales come from the same FineWeb-Edu draw the grid uses, not from LAMBADA.
+That is deliberate — it is the deployed setting, calibrate once on general text
+and then run whatever arrives — but it means a static per-tensor cell here
+carries both quantization damage and a calibration/evaluation distribution
+shift. The `per_tensor_dynamic` arm, which never reads the calibration set, is
+the control for exactly that, and it is run for every model.
+
+**Greedy exact-match is one of several LAMBADA protocols.** It is
+lm-eval-harness's `acc`, kept identical so the fp16 numbers are checkable
+against published ones. A ranked-candidate or stop-word-filtered variant would
+give different absolute numbers; whether it would give different *orderings* is
+untested here.

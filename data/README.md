@@ -36,6 +36,25 @@ Chosen as the furthest available point from the other two, which are both
 prose; it is also a *validation* split, so it was never a training target for
 any checkpoint in the roster. See README §5.7 and `analysis/corpora.py`.
 
+## LAMBADA is fetched, not committed
+
+`quant/lambada.py` reads `EleutherAI/lambada_openai` (config `en`, split
+`test`) from the Hub at run time and takes the first N examples in dataset
+order. Nothing is written into `data/`.
+
+That is a deliberate difference from the corpora above, and the reason is the
+one those files exist for. `fineweb_edu.txt` and `code_python.txt` were
+**streamed**: re-running the fetch gives a different document set, so the exact
+bytes are part of the result and had to be pinned. LAMBADA's test split is a
+fixed, versioned artefact and taking the first N of it in order is
+deterministic — there is nothing a committed copy would protect against that
+the hash does not.
+
+Every LAMBADA run records `examples_sha`, a fingerprint of the exact passages
+scored, on the same contract as `holdout_sha`: two cells are comparable only if
+it matches. If the split is ever revised upstream, the hash changes and the
+mismatch is visible rather than silent.
+
 `repo_corpus_archived.txt` — the small in-repo corpus used before the swap.
 Kept deliberately: R3-vs-R3-rev rests on it, and deleting it would make the
 correction unverifiable. Its `ppl_ref` values (136.6 on GPT-2, 54.9 on Qwen3)

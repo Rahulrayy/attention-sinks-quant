@@ -1,11 +1,10 @@
 # Handoff — Attention Sinks and Quantization: An Audit
 
-**Date:** 26 August 2026 (fourth session)
-**State:** Track A complete and stress-tested. Every finding checked on a second
-corpus at all three bit widths, and R6's mechanism checked on the axis it was
-attributed to. Four corrections came out of that (C20–C23), all of the same
-kind: the measurements held, the explanations wrapped around them did not.
-Track B not started.
+**Date:** 26 August 2026 (fifth session)
+**State:** Track A complete, stress-tested, and now confirmed on a metric that
+is not perplexity. The plan's last pre-registered Track-A commitment (one
+downstream task) is discharged. Track B not started — and the case for cutting
+it is now stronger than it was.
 **Authoritative sources:** `attention-sinks-quant-plan.md` §0 (corrections log), `LIMITATIONS.md`, `README.md`, `runs/results/`
 **Numbers:** every result table in the README is generated — `analysis.report` (§5.1–5.5), `analysis.distributions` (§5.4), `analysis.corpora` (§5.7). Do not transcribe them by hand — that is how the README came to carry superseded figures for five days (C19 has the story).
 
@@ -15,7 +14,7 @@ Track B not started.
 
 | | |
 |---|---|
-| Tests | **163 passing**, 14 files |
+| Tests | **180 passing**, 16 files |
 | Track A code (`sinks/`, `quant/`, `analysis/`) | **complete** — 0 stubs |
 | Track B code (`train/`) | **~15%** — 9 stubs, unchanged |
 | Quantization grid | **300 cells** at 8/6/4-bit on FineWeb-Edu, **+60** at 8/6/4-bit on the code corpus (+200 archived on the old corpus) |
@@ -23,11 +22,27 @@ Track B not started.
 | Diagnostic runs | **23** — 14 web + 9 code, arm decomposition plus localisation tests |
 | Distribution runs | **10** — 5 per corpus, re-measured with the feature-axis statistic (C23) |
 | Sink measurement runs | **5** — one per checkpoint, draw 0, no-BOS |
+| LAMBADA runs | **15** — 3 arms × 5 checkpoints, 1000 examples, 8-bit |
 | Corrections to the original plan | **23** |
-| Limitations recorded | **21** |
+| Limitations recorded | **22** |
 | Git | initialised 2026-08-25; the project was never a repository before |
 
 ### Done since the previous handoff
+
+- **R8 — LAMBADA** (§3), the plan's last unfulfilled Track-A commitment and the
+  only metric in this project that is not perplexity. All three headline claims
+  reproduce in behaviour, and the head-wise gate is worth **25.4 accuracy
+  points** under per-tensor 8-bit.
+- **Where perplexity is trustworthy, measured rather than assumed.** Under
+  per-tensor the two metrics rank the roster **identically**; under per-token
+  they differ, on cells that mostly cannot be distinguished from zero. Large
+  effects travel across metrics; noise-floor orderings do not — which is the
+  same boundary C21 and C22 hit from the other side.
+- **`quant/lambada.py` + `analysis/lambada.py`** — lm-eval-harness's
+  `lambada_openai` protocol, validated against a published number (GPT-2 small
+  0.3070 here vs ~0.326 on the full split).
+
+### Done in the session before that
 
 - **C23 — R6's mechanism was attributed to the wrong axis** (§3). The
   element-wise layer-0 tensor is extreme on *both* axes and **more** so on the
@@ -42,7 +57,7 @@ Track B not started.
   the intervention was run, on the measurement. That is what the prediction was
   for.
 
-### Done in the session before that
+### Done earlier
 
 - **R5 corpus-checked at 6 and 4 bits** (§3), the previous handoff's priority 1.
   40 more cells. Its *direction* claims travel; its thresholds and growth rates
@@ -50,7 +65,7 @@ Track B not started.
 - **`analysis.corpora --bitwidth`** — one printed number per sentence of README
   §5.5, so each can be checked rather than believed.
 
-### Done earlier
+### Done earlier still
 
 - **R7 — the second corpus** (§3), which was the previous handoff's own
   priority 1 and the project's largest unbounded sensitivity. 1.2M characters of
@@ -67,7 +82,7 @@ Track B not started.
 - **`data/fetch_code.py`** — the second-corpus fetch, every parameter held
   identical to `fetch_fineweb.py` so domain is the only thing that differs.
 
-### Done earlier still
+### And before that
 
 - **R6 — the layer-0 localisation** (mechanism claim later corrected by C23) (§3). The element-wise arm's
   per-tensor catastrophe is **one tensor**: the layer-0 MLP input, at 28.4× row
@@ -100,7 +115,6 @@ Track B not started.
 - **Track B entirely.** `train/attention.py` has working `softmax1` and
   `OutputGate`; `CausalSelfAttention`, `model.py`, `data.py`, `train.py` are
   contract-only stubs. No pretraining run has happened.
-- **LAMBADA.** The plan calls for one cheap downstream task. Only perplexity.
 - **The `detected_sinks` and `outlier_channels` exception arms.** Never run in
   the grid. `detected_sinks` is one command; **`outlier_channels` has no
   end-to-end path at all** — the CLI never builds an `outlier_mask`, so
@@ -138,9 +152,10 @@ something nobody was looking for, which is the interesting case.
 
 ## 3. Findings
 
-Six findings. R1, R3-rev, R4, R5 and R6 came earlier; **R7 is new — the second
-corpus — and it retracts half of R6** (C21) while strengthening the other half.
-Read R6 and R7 together; neither is complete alone.
+Seven findings. **R8 is new — LAMBADA, and the only one measured on something
+other than perplexity.** It confirms all three headline claims in behaviour and
+says where the project's own method is and is not trustworthy. R6 and R7 must
+still be read together; neither is complete alone.
 
 `README.md` §5 carries the same numbers with fuller argument. Everything here is
 draw 0, 95% sequence-bootstrap CIs over 32 held-out sequences, and on
@@ -391,6 +406,57 @@ has no measurable sign.
 strengthened; the one rank correlation over five models did not. That is a
 statement about kinds of evidence, not about this statistic — §10.
 
+### R8 — LAMBADA: the claims in a metric that is not perplexity
+
+**The plan's last unfulfilled Track-A commitment.** Last-word prediction,
+greedy exact-match, lm-eval-harness's `lambada_openai` `acc`. 1000 examples,
+8 bits. `python -m analysis.lambada`.
+
+Protocol validated against a published number: GPT-2 small scores **0.3070**
+here against ~0.326 on the full 5153.
+
+| model | fp16 | per-tensor | drop | disc. | per-token | drop | disc. |
+|---|---|---|---|---|---|---|---|
+| GPT-2 small | 0.3070 | 0.1950 | +0.1120 | 154 | 0.3070 | +0.0000 *ZERO* | 26 |
+| Qwen3-0.6B | 0.5260 | 0.2120 | +0.3140 | 346 | 0.5010 | +0.0250 | 75 |
+| `1B_baseline` | 0.5950 | 0.2440 | +0.3510 | 397 | 0.6090 | −0.0140 *ZERO* | 52 |
+| `1B_headwise` | 0.6070 | 0.5100 | **+0.0970** | 179 | 0.6060 | +0.0010 *ZERO* | 55 |
+| `1B_elementwise` | **0.6110** | **0.0010** ⌊ | **+0.6100** | 610 | 0.5910 | +0.0200 | 66 |
+
+**All three headline claims reproduce.** The fix works: on the matched pair
+under per-tensor, baseline loses 35.1 points and head-wise 9.7, intervals
+non-overlapping — **25.4 points** for +0.1% parameters. It is redundant: under
+per-token the same pair is −0.0140 and +0.0010, both crossing zero, so the
+architectural difference is **not measurable**. And the paper's headline variant
+shatters: element-wise has the **best fp16 accuracy in the roster** and 8-bit
+per-tensor takes it to **one correct answer in a thousand**.
+
+**Where perplexity is trustworthy — measured, not assumed.**
+`analysis.lambada --ranks` ranks the roster twice:
+
+| granularity | same ordering? |
+|---|---|
+| per-tensor | **identical**, all 4 rankable models |
+| per-token | **different** — but 3 of 5 drops contain zero |
+
+Large effects travel across metrics. Noise-floor orderings do not, and two
+metrics disagreeing about noise is not a finding. C21 and C22 both retracted
+orderings of small or threshold-adjacent effects; this is that boundary seen
+from the other side, and it is the closest thing this project has to a rule for
+when to trust its own method.
+
+**Two calibrations worth carrying.** Perplexity *overstates* the win — total
+per-tensor Δppl makes head-wise a 7.8× improvement, accuracy makes it 3.6×. And
+damage concentrates on hard tokens: LAMBADA target perplexity hits 7.11×
+reference on the baseline against a 2.22× whole-corpus ratio, so quantization
+hurts most on exactly the tokens needing long-range context — which averaged
+perplexity hides.
+
+**Discordant counts are load-bearing.** GPT-2's per-token drop is exactly
+0.0000 across **26 discordant pairs** — thirteen flipped each way and cancelled.
+That is a measurement; 0.0000 across 0 discordant pairs would be its absence.
+C18 in a second metric. LIMITATIONS §22 has the rest.
+
 ### What R3-rev corrected in R3 (unchanged, kept for the trail)
 
 | Claim in R3 | Fate |
@@ -419,12 +485,14 @@ project root, not a subfolder layout).
 | `quant/evaluate.py` | 619 | done | Per-token NLL, `D_sink` decomposition, `evaluate_cell`, `run_grid`, `--grid` CLI, corpus loading |
 | `quant/diagnose.py` | 246 | done | Arm decomposition, range-coverage table, projection exemption |
 | `quant/distributions.py` | 330 | done | Per-layer dispersion on **both** axes, effective bits, per-granularity underflow. Quantizes nothing (R6, C23) |
+| `quant/lambada.py` | 331 | done | `lambada_openai` greedy exact-match; paired per-example arrays and the discordant count (R8) |
 | `analysis/aggregate.py` | 211 | done | runs/ → dataframes; reconstructs `D_sink`; the comparability guard |
 | `analysis/stats.py` | 165 | done | Paired bootstrap, sequence bootstrap, variance-source reporting |
 | `analysis/figures.py` | 251 | done | Figure 1, bit-width figure; zero-crossing hollow, destroyed cells hatched |
 | `analysis/report.py` | 192 | done | The README's tables; per-width and per-bit-width views |
 | `analysis/distributions.py` | 380 | done | R6 tables joined to the damage they explain; `--sweep` finds the thresholds where the ranking fails, `--axis` reports both dispersion axes (C23) |
 | `analysis/corpora.py` | 396 | done | Cross-corpus join; per-claim stability verdicts computed rather than asserted, and `--bitwidth` maps every sentence of §5.5 to a number (R7, C21, C22) |
+| `analysis/lambada.py` | 265 | done | Accuracy beside the Δppl it should track; `--ranks` compares the two orderings, `--power` prints each cell's resolution (R8) |
 | `train/attention.py` | 82 | **partial** | `softmax1` and `OutputGate` work; `CausalSelfAttention` stubbed |
 | `train/model.py` | 28 | **stub** | nanoGPT-ish decoder — contract only |
 | `train/data.py` | 18 | **stub** | 16k BPE + streaming uint16 memmap — contract only |
@@ -447,6 +515,8 @@ project root, not a subfolder layout).
 | `test_distributions.py` | Dispersion against hand-derived answers; the falsification case (within-row peaking must NOT disperse); the axis pair discriminates a hot row from a hot feature channel and admits a hot *entry* disperses both; `collect` restores the model and leaves no hooks |
 | `test_dist_report.py` | `--skip-modules` runs excluded from the damage join (a treatment cannot stand in for what it treats); the sweep actually detects a reordering |
 | `test_corpora.py` | The headline reduction refuses a zero-crossing numerator; the ranking check reports "no threshold" when the order inverts, and does not credit an all-zero column |
+| `test_lambada.py` | The logits alignment (an off-by-one grades every model on the token AFTER the answer and looks fine); the target's leading space; all-or-nothing scoring across multi-token answers; the discordant counter tracks damage |
+| `test_lambada_report.py` | Cancellation is not agreement; the saturation floor fires; the dynamic control keeps its own key; resolution widens as the sample shrinks |
 
 ---
 
@@ -622,6 +692,7 @@ written before any code ran; 7–17 came from experiment; 18–20 from this sess
 | `runs/quant_code/` | 60 | **The second-corpus arm.** 8/6/4-bit, both granularities, `none`/`position_0`, draw 0 |
 | `runs/diag_code/` | 9 | Arm decomposition and the layer-0 localisation, re-run on code |
 | `runs/dist_code/` | 5 | Activation shape on code. R7's stability check |
+| `runs/lambada/` | 15 | 3 arms × 5 checkpoints. Per-example 0/1 arrays, so every interval is recomputable (R8) |
 | `runs/results/` | 5 | `summary.csv`, `d_sink.csv`, `sinks_summary.csv`, and the two figures |
 
 Committed to git: everything except `runs/quant/`, `runs/quant_repo_corpus/`
@@ -666,6 +737,12 @@ gitignored figure is a broken image in the README, and `runs/diag/` and
   it ranks nothing. This was flagged at 4 bits and missed at 8, where it had
   already invalidated a headline comparison. `is_destroyed` now enforces it.
 - **A sub-1% discrepancy is the dangerous kind** (C19). Investigate it.
+- **Trust an ordering in proportion to the size of the effect it orders**
+  (R8). Under per-tensor, perplexity and accuracy rank the roster identically;
+  under per-token they disagree, on cells that mostly contain zero. Every
+  ordering this project has retracted (C21, C22) was an ordering of small or
+  threshold-adjacent effects. Before quoting a rank, check whether the things
+  being ranked are individually distinguishable from nothing.
 - **A premise about what a fix *can* address is not a measurement of what the
   data *is*** (C23). R6 argued correctly that per-token scaling can only
   divide out row structure, then described the tensor as row-structured
@@ -711,7 +788,28 @@ gitignored figure is a broken image in the README, and `runs/diag/` and
 
 ## 11. Next steps, in priority order
 
-### 1. R6 at 6 and 4 bits
+### 1. Ship it, or cut Track B
+
+**Promoted, and it is now the honest recommendation rather than an option.**
+
+LAMBADA was the plan's last unfulfilled Track-A commitment and it is done (§3,
+R8). Track A now has seven findings, three corpora, three bit widths, two
+metrics, 23 logged corrections and 180 tests. The audit has an answer to the
+question it was built to ask, and the last four sessions produced **no new
+findings** — they produced four corrections to how existing findings were
+worded, plus one confirmation. That is what a project looks like when the
+measurements have converged and only the prose is still moving.
+
+The plan's own de-scoping section pre-registered cutting Track B first and
+shipping the inference-only audit. Everything below this line is optional; this
+is not.
+
+What "shipping" means concretely: the README is already the paper. What it
+lacks is a figure for R8 (`analysis/figures.py` has no accuracy panel), and a
+final read-through for claims that C20–C23 corrected in one document but not
+another. Neither is a measurement.
+
+### 2. R6 at 6 and 4 bits
 
 **The code corpus at 6 and 4 bits is done** (§3, C22) — that was the previous
 priority 1 and it is answered. What is left of the bit-width axis is the R6
@@ -732,15 +830,6 @@ interventional half is what travels.
 
 Cheap: distributions quantize nothing, so it is one holdout pass per checkpoint
 per corpus.
-
-### 2. LAMBADA, or one downstream task
-
-Promoted from 4. The plan calls for one cheap downstream task and perplexity is
-still the only measurement here. It matters more after C21/C22 than it did
-before: three of the five things those corrections touched were *orderings of
-perplexity damage*, and a second, differently-shaped metric is the cheapest
-independent check on whether those orderings mean anything. "Which arm is
-broken" is a live question, not a formality.
 
 ### 3. The `detected_sinks` and `outlier_channels` arms
 
@@ -773,11 +862,11 @@ and only element-wise, something separates that model on the feature axis which
 rescues everything or nothing, the feature axis is confirmed as uninformative
 here and the arm can be reported as a null and closed.
 
-### 4. Track B, or cut it
+### 4. Track B, if it happens at all
 
-The plan's own de-scoping section says cut Track B first and ship the
-inference-only audit. Track A now has six findings, two corpora and its own
-retractions on file, so that option
+See §11.1 — the recommendation is now to cut it. Kept here for the case where
+that call goes the other way. The plan's de-scoping section says cut Track B
+first and ship the inference-only audit; Track A's state makes that option
 is live and legitimate. If Track B does happen, `softmax1` is the arm worth the
 compute — widely cited, never evaluated with seeds — and the scaling identity is
 already implemented and tested.

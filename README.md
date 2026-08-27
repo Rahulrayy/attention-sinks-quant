@@ -13,8 +13,10 @@
 > `analysis.figures` reading from `runs/`. None of them are typed by hand. The
 > section order puts the finding first and the architecture last.
 >
-> A pretraining arm (`train/`, for `softmax1`) is specified and stubbed but was
-> not carried out. Section 6 explains what that leaves untested.
+> A pretraining arm (`train/`, for `softmax1`) was specified, partly built and
+> **deliberately cut**. Section 6 states what that leaves untested, and
+> `train/__init__.py` records which parts of it work and which are contract
+> only.
 
 ---
 
@@ -962,14 +964,18 @@ get read.
   languages or to long context.
 - **The held-out slice is 32 sequences.** Every confidence interval in this
   README is a bootstrap over those.
-- **The pretraining arm was not carried out**, which is the one gap Section 3
-  opens and does not close. `softmax1` is widely cited and has never been
-  evaluated with seeds. Testing it requires pretraining from scratch, because
-  the identity `softmax1(x) = s · softmax(x)` means a retrofit degrades a model
-  for reasons that say nothing about the mechanism (Section 4). The scaling
-  identity is implemented and tested (`tests/test_softmax1.py`) and the trainer
-  is a contract-only stub. So this repo says nothing about softmax1, and the
-  table in Section 3 marks it as still unevaluated rather than dropping the row.
+- **The pretraining arm was cut**, which is the one gap Section 3 opens and
+  does not close. `softmax1` is widely cited and has never been evaluated with
+  seeds. Testing it requires pretraining from scratch, because the identity
+  `softmax1(x) = s · softmax(x)` means a retrofit degrades a model for reasons
+  that say nothing about the mechanism (Section 4). This was a planned
+  contingency rather than an overrun: the project's de-scoping plan named this
+  arm as the first thing to drop and the inference-side audit as the fallback,
+  and that fallback was taken. The scaling identity is implemented and tested
+  (`tests/test_softmax1.py`); the trainer is a contract-only stub, and
+  `train/__init__.py` says which is which. So this repo says nothing about
+  softmax1, and the table in Section 3 keeps the row marked unevaluated rather
+  than dropping it.
 
 **On the method.**
 

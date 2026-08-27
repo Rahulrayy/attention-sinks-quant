@@ -38,6 +38,8 @@ standard §6 imposes on metric changes, applied to the plan itself.
 | C23 | §6, §7 | **R6's mechanism was attributed to the wrong axis.** The element-wise layer-0 tensor is extreme on *both* axes — row dispersion 28.4× and **feature dispersion 304×** against 1.6× / 6–9× on its siblings — and the feature axis is the more dispersed one on **every** model in the roster, including the least damaged. Per-feature underflow is flat and near zero everywhere, so it discriminates nothing. The localisation and its controls are unaffected | **Corrects an explanation, not a measurement** |
 | C24 | §6, §7, §9 | **The `outlier_channels` arm had no end-to-end path, and where it now has one it is undefined for two of five checkpoints.** `quant.evaluate` never built an `outlier_mask`, so selecting the arm raised; `sinks.measure` imported the detector and never called it. Wired 2026-08-27 by deriving the mask from the per-layer `channel_max` the sink runs already record — no re-measurement needed. At the locked 100× threshold it flags **1** channel on each sink-bearing model and **0** on both gated arms, which have no massive activations left to flag. A second defect the wiring exposed: one `ExceptionSpec` goes to every patched module, and a residual-stream channel index is meaningless on the 56 of 196 modules that read a different feature axis | **Kills an axis on 2 of 5 models** |
 | C25 | §6, §9 | **`detected_sinks` had never been run either, and once run it is the `position_0` arm.** The tau selection round-tripped its own dict keys through `float`: the grid is written `"2"`…`"100"`, and `str(float("100"))` is `"100.0"`, so it raised `KeyError` on **every** checkpoint in the roster. Fixed and extracted from `main` to somewhere a test can reach. It is then **undefined** for both gated arms (no tau both flags and validates) and selects exactly `[0]` on the other three, making its 30 cells **bit-identical** to `position_0`. The taus that flag more — τ=2, up to 17 positions — all fail C17's attention gate | **A pre-registered arm collapses into an existing one** |
+| C26 | §4, §8, §11 | **C16 never reached the config or the Makefile, so `make measure` had never completed.** `configs/models.yaml` declared `prepend_bos: [true, false]` for all three gated arms after C16 established that no Qwen-arch checkpoint here has a `bos_token_id`, and the `measure` target issued `--prepend-bos` unconditionally — so it raised on `gated_1b_baseline`, its **first** model, on every invocation. Config now declares `[false]` for the four Qwen-arch checkpoints; the target asks the config instead of assuming. Third never-executed path in one session, after C24 and C25 | **A pre-registered sweep that could not run** |
+| C27 | §6, §9 | **C25's "undefined for both gated arms" was a two-draw claim, and the fifth draw breaks it.** The full 5-draw sweep shows `1B_elementwise`'s τ=2 pass **validates on 2 of 5 draws**, so the `detected_sinks` arm is constructible there — but the second position it admits is different every time (291, 19, 18, 375, 177) and never the same token twice. Head-wise is undefined on all five. `sink_free`, the outlier-channel counts and the three sink-bearing models' τ selections are all stable across five draws, so C24 and R10's main claim are untouched | **Qualifies a claim made the same day** |
 
 Findings that are *results* rather than corrections are marked **✎ RESULT**:
 [C12](#c12) (early preview on GPT-2), [R1](#r1) (the gated trio is sink-free),
@@ -873,6 +875,90 @@ attention-sinks-quant/
 > arms named in §6, all four executed, and the grid's real degrees of freedom
 > are three, not four — `none`, the token axis, the feature axis. `D_sink` was
 > always the token axis and remains so; nothing that has been published moves.
+> ### ✎ CORRECTION C26 — 2026-08-27 · the third unrun path, and this one is the sweep itself
+>
+> C24 found an arm with no caller. C25 found an arm that raised on every
+> checkpoint. Both were reached by asking "has this actually been executed?" The
+> third answer to that question is the `measure` target.
+>
+> **C16 established in session one** that no Qwen-arch checkpoint in this roster
+> has a `bos_token_id` — the config carries 151643, the tokenizer does not, and
+> the tokenizer is what builds the batches. It was written into LIMITATIONS §14
+> and into `qwen3_0.6b_base`'s config entry. It was **not** written into the
+> three gated arms' entries, which went on declaring `prepend_bos: [true,
+> false]`, and it was not written into the Makefile, whose `measure` target
+> issued `--prepend-bos` for every model unconditionally.
+>
+> `MODELS` begins with `gated_1b_baseline`. `to_batches` raises rather than
+> substitute another token for a missing BOS — correctly and by design, since a
+> substitute would silently change what sits at position 0, the exact confound
+> trap §9.4 exists to prevent. So `make measure` raised on its first model on
+> every invocation it has ever had. Every sink run on disk was produced by a
+> direct `python -m sinks.measure` call, never by the target that claims to
+> produce them.
+>
+> **Corrected.** The four Qwen-arch entries declare `prepend_bos: [false]`. The
+> target runs the no-BOS arm for every model and asks `configs/models.yaml`
+> whether a BOS arm exists, so a checkpoint that does have one needs no edit to
+> the Makefile. `to_batches` is untouched: it was the only component in the
+> chain behaving correctly.
+>
+> **What it costs the audit: nothing measured, and one thing claimed.** No
+> published number came from that target, and the BOS axis was already recorded
+> as unexecutable (§14). What was wrong is §7's implicit claim that `make repro`
+> reproduces the project — it would have stopped at the second target.
+>
+> **Three in one session, and they share one shape.** An arm with no caller, a
+> selector that mangled its own keys, and a sweep that died on its first
+> iteration. None was reachable by a unit test; all three sat in glue — a CLI
+> body, a `main()`, a Makefile recipe — which is exactly the layer this project
+> never tested, and the layer where "it is implemented" stops being the same
+> claim as "it runs". C20–C23 were explanations outrunning measurements. C24–C26
+> are a different failure: **inventory mistaken for execution.**
+
+> ### ✎ CORRECTION C27 — 2026-08-27 · what the fifth draw said that the second did not
+>
+> C25 reported `detected_sinks` as **undefined for both gated arms**. That was
+> measured on draw 0 and confirmed on draw 1, and the confirmation was written
+> up here as though two draws settled it. The full sweep says otherwise for one
+> of the two models.
+>
+> `1B_elementwise`, τ=2, across all five draws:
+>
+> | draw | flagged | validated |
+> |---|---|---|
+> | 0 | `[0, 291]` | no — attention disagrees on 291 |
+> | 1 | `[19]` | no — **position 0 not recovered at all** |
+> | 2 | `[0, 18]` | **yes** |
+> | 3 | `[0, 375]` | no — attention disagrees on 375 |
+> | 4 | `[0, 177]` | **yes** |
+>
+> So the arm is constructible on **2 of 5 draws**, not none. And what it would
+> exempt on those two draws is `[0, 18]` and `[0, 177]` — the second position is
+> a different token every single draw, and on draw 1 the detector does not find
+> position 0 at all. Five draws, five different answers.
+>
+> **This makes the null stronger, not weaker.** A single validated τ=2 pass on
+> this checkpoint is not evidence of a second sink; it is one noise token
+> clearing a p95 received-attention bar by chance, and the way to see that is
+> exactly what the plan's own §9 warning implies — look across draws. The gate
+> rejects 3 of 5, which is it working; the other 2 are caught only by
+> reproducibility, which no single run can provide.
+>
+> **What is untouched, checked rather than assumed.** Across all five draws:
+> `sink_free` is stable on all five checkpoints; the outlier-channel counts are
+> stable at 1/1/1/0/0, so C24 and R9 stand exactly as written; and the three
+> sink-bearing models select the same τ and the same `[0]` every time, so R10's
+> substantive claim — `detected_sinks` reduces to `position_0` on the models
+> where it is defined — is unaffected. Re-running draws 0 and 1 reproduced the
+> earlier files identically, 10 of 10.
+>
+> **The lesson is one this project keeps re-learning from the other side.** C21
+> retracted a ranking that held on one corpus. C22 retracted a threshold that
+> held on one corpus. This retracts a *stability* claim that held on two draws.
+> Two agreeing samples are not a stable quantity — they are two samples. The
+> correction was found within hours of the claim, by running the sweep the claim
+> had said was optional.
 
 ---
 

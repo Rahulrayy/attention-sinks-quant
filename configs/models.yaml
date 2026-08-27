@@ -32,7 +32,11 @@ models:
       tie_word_embeddings: true
       qk_norm: true
       gate: none
-    prepend_bos: [true, false] # trap §9.4 — run both ways
+    # C16: no Qwen checkpoint in this roster has a bos_token_id, these three
+    # included, so the BOS arm cannot be built for them either. Declared [true,
+    # false] until 2026-08-27, which made `make measure` raise on its first
+    # model. See LIMITATIONS.md §14.
+    prepend_bos: [false]
 
   - id: gated_1b_headwise
     hf_repo: QwQZh/gated_attention
@@ -42,7 +46,11 @@ models:
     arch: { family: qwen3, hidden_size: 2048, n_layer: 28, n_head: 16,
             n_kv_head: 8, vocab_size: 152064, tie_word_embeddings: true,
             qk_norm: true, gate: headwise }
-    prepend_bos: [true, false]
+    # C16: no Qwen checkpoint in this roster has a bos_token_id, these three
+    # included, so the BOS arm cannot be built for them either. Declared [true,
+    # false] until 2026-08-27, which made `make measure` raise on its first
+    # model. See LIMITATIONS.md §14.
+    prepend_bos: [false]
 
   - id: gated_1b_elementwise
     hf_repo: QwQZh/gated_attention
@@ -52,7 +60,11 @@ models:
     arch: { family: qwen3, hidden_size: 2048, n_layer: 28, n_head: 16,
             n_kv_head: 8, vocab_size: 152064, tie_word_embeddings: true,
             qk_norm: true, gate: elementwise }
-    prepend_bos: [true, false]
+    # C16: no Qwen checkpoint in this roster has a bos_token_id, these three
+    # included, so the BOS arm cannot be built for them either. Declared [true,
+    # false] until 2026-08-27, which made `make measure` raise on its first
+    # model. See LIMITATIONS.md §14.
+    prepend_bos: [false]
 
   # ---- External validity -----------------------------------------------
 

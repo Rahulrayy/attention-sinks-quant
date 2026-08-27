@@ -16,12 +16,18 @@ gate:
 test:
 	$(PY) -m pytest tests/ -v
 
-## Track A: sink + massive-activation measurement, both BOS policies.
+## Track A: sink + massive-activation measurement, whichever BOS policies the
+## model actually has. This ran --prepend-bos unconditionally until 2026-08-27
+## and died on its first model: four of five checkpoints have no bos_token_id
+## (C3, C16) and to_batches refuses to substitute another token. models.yaml is
+## the authority, so a checkpoint that does have a BOS arm needs no edit here.
 measure:
 	@for m in $(MODELS); do \
 	  for s in $(SEEDS); do \
-	    $(PY) -m sinks.measure --model $$m --calib-seed $$s --prepend-bos || exit 1; \
 	    $(PY) -m sinks.measure --model $$m --calib-seed $$s || exit 1; \
+	    if $(PY) -c "import sys,yaml; specs=yaml.safe_load(open('configs/models.yaml'))['models']; sys.exit(0 if True in next(x for x in specs if x['id']=='$$m')['prepend_bos'] else 1)"; then \
+	      $(PY) -m sinks.measure --model $$m --calib-seed $$s --prepend-bos || exit 1; \
+	    fi; \
 	  done; \
 	done
 

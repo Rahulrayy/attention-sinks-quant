@@ -174,6 +174,23 @@ what drives the position-0 sink. GPT-2 alone can answer that within-model, and a
 single checkpoint cannot separate a BOS effect from an architecture effect. The
 question is out of scope for this project rather than answered by it.
 
+**The one within-model answer GPT-2 can give, now that the BOS arm has been
+run.** Across all five draws, prepending BOS moves GPT-2's mean sink mass by
+about 0.6% (0.3834 → 0.3859 on draw 0, and similarly on the rest) and changes
+neither the selected τ nor the flagged positions. On this checkpoint the
+position-0 sink is not a BOS artefact. One model, so it separates nothing about
+architecture — which is what the paragraph above already says.
+
+**This entry did not reach the config or the Makefile until 2026-08-27**
+(**C26**). `configs/models.yaml` went on declaring `prepend_bos: [true, false]`
+for all three gated arms, and `make measure` went on issuing `--prepend-bos`
+unconditionally — so the target raised on its **first** model, every time, and
+therefore had never completed. Both are corrected: the config now declares
+`[false]` for the four Qwen-arch checkpoints, and the Makefile asks the config
+rather than assuming. `to_batches` was right all along and is unchanged; it
+refuses to substitute another token, which is what turned a silent confound into
+a loud failure.
+
 ### 15. The released arms are 1.72B parameters, not the "1B" their names suggest
 Measured after loading. Consequence for anyone reproducing this: budget ~3.3 GB
 of disk per arm (~10 GB for the trio, ~12 GB with the other two checkpoints) and
@@ -463,11 +480,12 @@ one channel on all three models. Nothing here licenses a claim about "outlier
 channels" in the plural, and the arm is not a test of the more permissive
 `union_outlier_channels` reduction, which is implemented and unused.
 
-**The mask comes from draw 0's sink run.** Checked on a second draw
-(`--calib-seed 1`, all five checkpoints, 2026-08-27): the flagged counts are
-unchanged at 1/1/1/0/0, so the arm is defined on the same three models and
-undefined on the same two. Two draws, not five — see §24 for what that does and
-does not settle.
+**The mask comes from draw 0's sink run, and this is the one verdict here that
+survived all five.** `sinks.measure` on draws 0–4, all five checkpoints: the
+flagged counts are **1/1/1/0/0 on every draw**, so the arm is defined on the
+same three models and undefined on the same two throughout. Worth stating
+because the token-axis arm's verdict did *not* survive the same test (§24, C27)
+— the feature axis is the stabler of the two detectors here.
 
 **And it reaches 140 of 196 modules, not all of them.** One `ExceptionSpec` is
 handed to every patched module, but a decoder's modules do not share an input
@@ -487,8 +505,8 @@ commit. What it produces is a null of the completest kind:
 | GPT-2 small | 50 | `[0]` | bit-identical to `position_0` |
 | Qwen3-0.6B-Base | 100 | `[0]` | bit-identical to `position_0` |
 | `1B_baseline` | 100 | `[0]` | bit-identical to `position_0` |
-| `1B_headwise` | — | — | arm undefined (§17) |
-| `1B_elementwise` | — | — | arm undefined (§17) |
+| `1B_headwise` | — | — | arm undefined on all 5 draws (§17) |
+| `1B_elementwise` | — | — | undefined on 3 of 5 draws — see below (**C27**) |
 
 So the grid has three real exception arms, not four: `none`, the token axis, and
 the feature axis (§23). Nothing published changes — `D_sink` was always defined
@@ -508,26 +526,34 @@ That work reports multi-level structure on other models at longer contexts. A
 256-token window on five checkpoints cannot speak to it, and this entry should
 not be cited as though it could.
 
-**The detector output comes from one draw, and that has now been checked
-rather than assumed.** The exception list is built from
+**The detector output comes from one draw, and the full five have now been
+measured.** The exception list is built from
 `runs/sinks/<model>_calib0_nobos.json` — draw 0, no BOS — and held fixed across
-all five draws of the grid, so the arm inherits whatever that one detector pass
-saw. `sinks.measure --calib-seed 1` was run on all five checkpoints on
-2026-08-27 and **every decision reproduces**:
+all five draws of the grid. Draw 1 was checked first and agreed on everything,
+which was written up as settling the question. It did not. The complete sweep:
 
-| model | draw 0 | draw 1 |
+| model | τ across draws 0–4 | stable |
 |---|---|---|
-| GPT-2 small | τ=50, `[0]` | τ=50, `[0]` |
-| Qwen3-0.6B-Base | τ=100, `[0]` | τ=100, `[0]` |
-| `1B_baseline` | τ=100, `[0]` | τ=100, `[0]` |
-| `1B_headwise` | undefined | undefined |
-| `1B_elementwise` | undefined | undefined |
+| GPT-2 small | τ=50, `[0]` ×5 | **yes** |
+| Qwen3-0.6B-Base | τ=100, `[0]` ×5 | **yes** |
+| `1B_baseline` | τ=100, `[0]` ×5 | **yes** |
+| `1B_headwise` | undefined ×5 | **yes** |
+| `1B_elementwise` | undefined, undefined, τ=2 `[0,18]`, undefined, τ=2 `[0,177]` | **no** (**C27**) |
 
-`sink_free` is unchanged on all five, and §23's outlier-channel counts are
-unchanged too (1/1/1/0/0). The continuous metrics do move — mean sink mass
-shifts 3–9% between draws, e.g. 0.3834 → 0.3657 on GPT-2 — but nothing crosses
-a decision boundary.
+**The element-wise exception (C27).** Its τ=2 pass validates on draws 2 and 4,
+so the arm *is* constructible there. But the second position differs on every
+draw — 291, 19, 18, 375, 177 — and on draw 1 the detector does not recover
+position 0 at all. That is not a second sink; it is a different noise token each
+time, occasionally clearing the p95 received-attention bar by chance. It makes
+the null stronger: a single validated τ=2 pass on this checkpoint is not
+evidence of anything, and only cross-draw agreement could be.
 
-**Two draws is not five.** This says the selection is not delicately balanced on
-draw 0; it does not establish draw-independence. Draws 2–4 have not been
-measured, and `make measure` is the target that would do it.
+`sink_free` is stable on all five checkpoints across all five draws, and §23's
+outlier-channel counts are stable at 1/1/1/0/0 — so the feature-axis arm's
+verdict is genuinely draw-independent where this one is not. The continuous
+metrics move (mean sink mass by 7–18% across draws) without crossing any
+boundary for the four stable models.
+
+**Re-running draws 0 and 1 reproduced the earlier files identically**, 10 of 10,
+so the pipeline is deterministic and the instability above is the corpus slice,
+not the code.

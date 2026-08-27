@@ -25,10 +25,10 @@ it.
 | Corpora | **3** committed — FineWeb-Edu (current), Python source (second-corpus arm), in-repo markdown (archived) |
 | Diagnostic runs | **23** — 14 web + 9 code, arm decomposition plus localisation tests |
 | Distribution runs | **10** — 5 per corpus, re-measured with the feature-axis statistic (C23) |
-| Sink measurement runs | **10** — one per checkpoint on draws 0 and 1, no-BOS; draw 1 reproduces every detector decision |
+| Sink measurement runs | **30** — the full sweep: 5 checkpoints × 5 draws no-BOS, plus GPT-2's BOS arm ×5. Four of five detector verdicts are draw-stable; the fifth is C27 |
 | LAMBADA runs | **15** — 3 arms × 5 checkpoints, 1000 examples, 8-bit |
 | Figures | **3** — `fig1_d_sink`, `fig2_bitwidth`, `fig3_lambada`, all from `analysis.figures` |
-| Corrections to the original plan | **25** |
+| Corrections to the original plan | **27** |
 | Limitations recorded | **24** |
 | Git | initialised 2026-08-25; the project was never a repository before |
 
@@ -76,6 +76,22 @@ moving, and this session was the prose.
   `sinks.measure --calib-seed 1` on all five checkpoints reproduces every
   decision — τ, positions, outlier counts, `sink_free`. The continuous metrics
   move a few percent and nothing crosses a boundary. Two draws, not five.
+- **C26 — the third unrun path, and this one is the sweep** (§7). `make measure`
+  issued `--prepend-bos` to every model, and four of five have no BOS token
+  (C16), so it raised on `gated_1b_baseline` — its first — on every invocation
+  it has ever had. C16 had reached LIMITATIONS §14 and one config entry, never
+  the other three or the Makefile. Both corrected; the target now asks the
+  config. No published number came from it.
+- **The full measure sweep, finally runnable, run — and it produced C27.** 30
+  runs: 5 checkpoints × 5 draws no-BOS, plus GPT-2's BOS arm at all five. It
+  overturned a claim made two commits earlier the same day (§3, R10): the
+  element-wise `detected_sinks` arm is constructible on 2 of 5 draws, not none,
+  and the position it admits is different every draw. Re-running draws 0 and 1
+  reproduced the originals identically, 10 of 10, so the pipeline is
+  deterministic and the instability is the corpus slice.
+- **GPT-2's BOS arm, the one within-model BOS comparison the roster allows.**
+  Prepending BOS moves its mean sink mass ~0.6% and changes neither τ nor
+  positions, on all five draws. LIMITATIONS §14.
 - **The repo map's line counts are now read off the files.** Seven of the
   twenty-two rows were stale, `analysis/report.py` by 40 lines. A table of
   remembered numbers, in a project whose thesis is "generate, do not
@@ -591,13 +607,13 @@ inside `main()` where no test could reach it. Now
 `quant.evaluate.detected_sink_positions`, with five tests, the first an
 integer-keyed grid (**C25**).
 
-| model | τ | positions | arm |
-|---|---|---|---|
-| GPT-2 small | 50 | `[0]` | = `position_0` |
-| Qwen3-0.6B-Base | 100 | `[0]` | = `position_0` |
-| `1B_baseline` | 100 | `[0]` | = `position_0` |
-| `1B_headwise` | — | — | **undefined** |
-| `1B_elementwise` | — | — | **undefined** |
+| model | τ | positions | arm | stable over 5 draws |
+|---|---|---|---|---|
+| GPT-2 small | 50 | `[0]` | = `position_0` | yes |
+| Qwen3-0.6B-Base | 100 | `[0]` | = `position_0` | yes |
+| `1B_baseline` | 100 | `[0]` | = `position_0` | yes |
+| `1B_headwise` | — | — | **undefined** | yes |
+| `1B_elementwise` | — | — | **undefined** on draw 0 | **no — C27** |
 
 **The cells are bit-identical to `position_0`**, `delta_ppl` and per-sequence
 arrays alike — verified across all 30, not assumed from the position list. The
@@ -611,6 +627,20 @@ axis, the feature axis. Nothing published moves; `D_sink` was always
 `position_0`. It is a null about three checkpoints, one detector and a 256-token
 window, and **not** a refutation of the multi-level sink work that motivated the
 detector. LIMITATIONS §24.
+
+**C27 — and the fifth draw broke half of this.** "Undefined for both gated
+arms" was measured on draw 0, confirmed on draw 1, and written up as settled.
+The full sweep says `1B_elementwise`'s τ=2 pass validates on draws **2 and 4**,
+so the arm is constructible on 2 of 5 draws. What it would exempt there is
+`[0, 18]` and `[0, 177]`, and across all five draws the second position is a
+different token every time — 291, 19, 18, 375, 177 — with draw 1 failing to
+recover position 0 at all. Not a second sink: one noise token per draw
+occasionally clearing a p95 bar. The null is *stronger* for it.
+
+Untouched and checked across all five draws: `sink_free` on every checkpoint,
+the outlier counts at 1/1/1/0/0 (R9 is genuinely draw-independent), and the τ
+selection on all three sink-bearing models — so the claim above, that
+`detected_sinks` reduces to `position_0` where it is defined, stands.
 
 **Both never-run arms are now run, and both were broken in the same way:** a
 code path with unit tests on its parts and no test of the path itself. That is
@@ -715,6 +745,10 @@ pip install -r requirements.txt
 #   W8 per-channel ~0.0075   A8 per-tensor ~0.235   A4 per-tensor ~0.885
 python -m pytest tests/test_fakequant.py -v
 
+# The sink pass. --seq-len 512 --n-batches 4 is what every committed run used;
+# the defaults are 1024/64 and would measure a different slice. `make measure`
+# now walks all five draws for all five checkpoints and adds the BOS arm only
+# where the tokenizer has a BOS token -- four of five do not (C16, C26).
 python -m sinks.measure --model gpt2_small --calib-seed 0 --seq-len 512 --n-batches 4
 
 # The grid. Loads each checkpoint ONCE and skips finished cells, so it is
@@ -943,13 +977,28 @@ gitignored figure is a broken image in the README, and `runs/diag/` and
   way since the first commit. Before believing an arm exists, execute it end to
   end once — the tests it passes are the tests someone wrote for the part that
   worked.
-- **Test the path, not just the parts** (C24, C25). Both never-run exception
-  arms were broken, in different ways, behind green unit tests: one had no
-  caller building its mask, the other round-tripped its own dict keys through
-  `float` and raised on every checkpoint. Neither defect was reachable by any
-  test, because the logic sat in `main()`. Both are now extracted to functions
-  a test can call. If a code path has never been executed end to end, assume it
-  does not work, whatever its components' coverage says.
+- **Test the path, not just the parts** (C24, C25, C26). Three never-executed
+  paths turned up in one session and all three were broken: an arm with no
+  caller building its mask, a τ selector that round-tripped its own dict keys
+  through `float` and raised on every checkpoint, and a Makefile target that
+  issued `--prepend-bos` to models with no BOS token and died on its first
+  iteration. None was reachable by a unit test, because all three sat in
+  **glue** — a CLI body, a `main()`, a recipe. That is the layer this project
+  never tested and the layer where "it is implemented" stops meaning "it runs".
+  Ask of anything you did not personally watch execute: has this ever run?
+- **Two agreeing samples are not a stable quantity** (C27). "Undefined for both
+  gated arms" was measured on one draw, confirmed on a second, and written up as
+  settled. Draws 2 and 4 disagreed. The same shape as C21 (a ranking that held
+  on one corpus) and C22 (a threshold that held on one corpus), arriving from
+  the draw axis instead. If a verdict is worth calling stable, run the sweep the
+  plan pre-registered rather than a spot check — the spot check is the thing
+  that makes an unstable verdict look stable.
+- **A correction is not applied until every artefact that encodes it is
+  changed** (C26). C16 established in session one that no Qwen-arch checkpoint
+  has a BOS token. It reached LIMITATIONS §14 and one config entry, and not the
+  other three config entries or the Makefile, where it stayed wrong for five
+  sessions. The same shape as the C23 propagation gap this session opened with:
+  documents and code drift apart claim by claim, not file by file.
 - **A bounds check is not a meaning check** (C24). Channel indices from a
   2048-wide residual stream are all "in range" on a 6144-wide MLP intermediate,
   so a clip accepted them and would have exempted 56 of 196 modules by
@@ -1037,17 +1086,19 @@ being unknowns — one produced a finding (the feature axis is model-specific an
 undefined on the model that most needed it), the other collapsed into an arm
 that already existed.
 
-**The draw-dependence knob is checked.** Both arms take their exception list
-from draw 0's detector pass, held fixed across all five draws of the grid, so a
-different draw could in principle have selected a different τ or a different
-channel. `sinks.measure --calib-seed 1` on all five checkpoints:
-**every decision reproduces** — same τ, same `[0]`, same two models undefined,
-same 1/1/1/0/0 outlier counts, same `sink_free` verdicts. Mean sink mass moves
-3–9% between draws without crossing anything. LIMITATIONS §23 and §24.
+**The draw-dependence knob is closed, and it cost a claim.** Both arms take
+their exception list from draw 0's detector pass, held fixed across all five
+draws of the grid. The full sweep ran — 5 checkpoints × 5 draws, plus GPT-2's
+BOS arm — and four of the five detector verdicts are draw-stable while the
+fifth is not: `1B_elementwise`'s `detected_sinks` arm is constructible on 2 of
+5 draws, and the position it admits differs every draw (**C27**). The
+feature-axis counts, `sink_free`, and the three sink-bearing models' τ
+selections are stable across all five. LIMITATIONS §23 and §24.
 
-**What is left of it is draws 2–4.** Two draws says the selection is not
-delicately balanced on draw 0; it does not establish draw-independence.
-`make measure` runs the full 5×2 sweep if anyone wants it closed properly.
+**Nothing is left on this axis.** If anyone reopens it, the question is no
+longer stability but whether the draw-2/draw-4 element-wise cells are worth
+running at all — and the argument against is that two other draws contradict
+the exception list they would use.
 
 ### 4. Track B, if it happens at all
 

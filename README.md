@@ -810,7 +810,7 @@ Run, it selects:
 | Qwen3-0.6B-Base | 100 | `[0]` | = `position_0` |
 | `1B_baseline` | 100 | `[0]` | = `position_0` |
 | `1B_headwise` | — | — | **undefined** |
-| `1B_elementwise` | — | — | **undefined** |
+| `1B_elementwise` | — | — | **undefined** on this draw — see below |
 
 On all three sink-bearing models the validated detector output *is* position 0,
 so the arm's cells come out **bit-identical** to the `position_0` cells —
@@ -826,11 +826,26 @@ defined on `position_0`. But this is a null about *three checkpoints, one
 detector and a 256-token window*, and specifically **not** a refutation of the
 multi-level sink literature that motivated the detector (§2). LIMITATIONS §24.
 
-Both arms read their exception list from a single detector pass, so that pass
-was re-run on a second calibration draw: every decision above reproduces — same
-τ, same positions, same two models undefined, same outlier-channel counts. The
-continuous metrics move a few percent without crossing anything. Two draws is
-not five, and LIMITATIONS §24 says so.
+**And then the draws disagreed about one cell of that table.** Both arms read
+their exception list from a single detector pass, so all five passes were run
+(`make measure`, 5 checkpoints × 5 draws). Four of the five rows above are the
+same on every draw. `1B_elementwise` is not: its τ=2 pass fails validation on
+draws 0, 1 and 3 and **passes** on draws 2 and 4, so the arm is constructible on
+two draws in five. What it would exempt there is `[0, 18]` and `[0, 177]` — and
+across all five draws the second position is a different token every time (291,
+19, 18, 375, 177), with draw 1 failing to find position 0 at all.
+
+That is not a second sink. It is one noise token per draw, occasionally clearing
+the p95 received-attention bar by chance, and it makes the null **stronger**: a
+single validated τ=2 pass on this checkpoint is evidence of nothing, and only
+agreement across draws could be. Filed as **C27**, against a claim this README
+made from two draws earlier the same day.
+
+What did survive all five draws: `sink_free` on every checkpoint, the
+outlier-channel counts at 1/1/1/0/0 (so §5.9's feature-axis verdict is
+genuinely draw-independent), and the τ selection on all three sink-bearing
+models. Re-running draws 0 and 1 reproduced the original files identically,
+10 of 10 — the instability is the corpus slice, not the code. LIMITATIONS §24.
 
 ## 6. Limitations
 

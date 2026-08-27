@@ -386,11 +386,38 @@ says nothing about its origin. Establishing that would need training-time
 evidence — checkpoints over the course of a run — which this project does not
 have and which its de-scoping section (Track B) already ruled out.
 
-Finally, all of it is one bit width. The dispersion statistic is
-bit-width-dependent by construction: `eff_bits` and both underflow fractions are
-computed against a specific integer grid, so the layer-0 tensor's ~99.2%
-underflow is an **8-bit** number and the 6- and 4-bit equivalents have not been
-measured on either corpus.
+Finally, the bit-width axis — which has now been measured on both corpora, and
+split this paragraph in two.
+
+**`dispersion` never depended on the grid** (**C28**). This entry used to call
+the dispersion statistic bit-width-dependent by construction. It is
+`amax / median row amax`, a property of the tensor: identical at 8, 6 and 4 bits
+across 1664 layer-observations, five models, both corpora, no exceptions. R6's
+headline "28.4× against 1.6×" was never provisional.
+
+**The underflow half does depend on it, and that is where the whole bit-width
+story turned out to live** (R11). The layer-0 tensor's per-tensor underflow is
+0.9926 at 8 bits, and so are its siblings' — 0.0957 and 0.0705 — a **10.4×**
+contrast. At 6 bits the siblings climb to 0.36 and 0.28 and the contrast falls
+to **2.8×**; at 4 bits everything is at 0.84–1.00 and the contrast is **1.09×**.
+The statistic that discriminates at 8 bits discriminates weakly at 6 and not at
+all at 4, and both corpora agree to within 6%. So R6's *discriminating* claim is
+an 8-bit claim, said precisely rather than hedged.
+
+**What survives the width change is the intervention, down to 6 bits and not
+below.** Exempting the layer-0 MLP buys 530× at 8 bits, 39× at 6, and 3.82× at
+4 — where the specificity control (eight *other* blocks) buys 1.92× and the
+sibling control on head-wise buys 2.81×. At 4 bits exempting any three modules
+on any model helps a little, because everything is drowning; the experiment has
+stopped being an experiment. At 8 and 6 bits the controls hold and it is still
+one tensor.
+
+**And the remedy fails before the mechanism does.** At 8 bits the exemption
+takes the element-wise arm to 1.45× its reference — a working model. At 6 bits
+the same exemption, still 39× better than its control, leaves it at **91.7×**:
+the localisation is intact and the fix no longer fixes anything, because the
+rest of the network has started failing too. A mechanism that still holds and a
+remedy that no longer works are different findings and are reported as such.
 
 ### 22. LAMBADA is one task, in one language, at one sample size
 The downstream check (README §5.8) is a real second metric and it is not a

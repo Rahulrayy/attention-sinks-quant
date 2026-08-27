@@ -1,0 +1,68 @@
+{
+  "model": "gated_1b_elementwise",
+  "bits": 4,
+  "ppl_ref": 14.47735645757423,
+  "seq_len": 256,
+  "calib_tokens": 2048,
+  "eval_tokens": 8192,
+  "calib_seed": 0,
+  "corpus": "C:\\Users\\rahul\\OneDrive\\Desktop\\LEIDEN SEM 2\\PERSONAL\\attention\\data\\fineweb_edu.txt",
+  "corpus_sha256": "9c8501c905092716",
+  "holdout_sha": "f47598e844632875",
+  "skip_modules": [
+    "layers.0.mlp"
+  ],
+  "arms": [
+    {
+      "arm": "w_only",
+      "n_patched": 193,
+      "n_calibrated": 0,
+      "ppl_quant": 508.97595014177705,
+      "delta_ppl": 494.49859368420283,
+      "skip_modules": [
+        "layers.0.mlp"
+      ]
+    },
+    {
+      "arm": "a_only_static",
+      "n_patched": 193,
+      "n_calibrated": 193,
+      "ppl_quant": 839447.2516254834,
+      "delta_ppl": 839432.7742690258,
+      "skip_modules": [
+        "layers.0.mlp"
+      ]
+    },
+    {
+      "arm": "a_only_dynamic",
+      "n_patched": 193,
+      "n_calibrated": 0,
+      "ppl_quant": 19592.131844553587,
+      "delta_ppl": 19577.654488096014,
+      "skip_modules": [
+        "layers.0.mlp"
+      ]
+    },
+    {
+      "arm": "a_only_per_token",
+      "n_patched": 193,
+      "n_calibrated": 0,
+      "ppl_quant": 2068.3844577876175,
+      "delta_ppl": 2053.907101330043,
+      "skip_modules": [
+        "layers.0.mlp"
+      ]
+    },
+    {
+      "arm": "full_static",
+      "n_patched": 193,
+      "n_calibrated": 193,
+      "ppl_quant": 185742.67723032538,
+      "delta_ppl": 185728.1998738678,
+      "skip_modules": [
+        "layers.0.mlp"
+      ]
+    }
+  ],
+  "coverage": null
+}

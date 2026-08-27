@@ -405,6 +405,43 @@ blocks then process the wreckage, which is how a single tensor produces +3482
 rather than a few points. What it is *not* an account of is which axis the
 dispersion sits on, or why per-token suffices — C23, above.
 
+#### Across bit widths: the mechanism outlives the remedy
+
+Everything above is 8-bit. `dispersion` turns out never to have been a
+bit-width-dependent number — it is `amax / median row amax`, a property of the
+tensor, identical at 8, 6 and 4 bits across 1664 layer-observations on both
+corpora (**C28**). The *underflow* half does depend on the grid, and that is
+where the whole width story lives.
+
+| | 8-bit | 6-bit | 4-bit |
+|---|---|---|---|
+| layer-0 underflow, element-wise | 0.9926 | 0.9991 | 0.9998 |
+| layer-0 underflow, `1B_baseline` | 0.0957 | 0.3591 | 0.9134 |
+| **contrast** | **10.4×** | **2.8×** | **1.09×** |
+| exempting block 0 buys | **530×** | **39×** | 3.82× |
+| …8 *other* blocks buy | 1.04× | 0.90× (worse) | **1.92×** |
+| …the same exemption on head-wise | 0.96× (worse) | 1.10× | **2.81×** |
+
+Read down the columns. **At 8 and 6 bits the intervention is specific**: the
+layer-0 MLP buys two orders of magnitude, unrelated blocks buy nothing, and the
+undamaged siblings do not move. **At 4 bits it is not**: eight unrelated blocks
+buy 1.92× and the same exemption on a healthy sibling buys 2.81×, both the same
+order as the treatment. When everything is drowning, exempting anything helps a
+little, and the experiment stops being one.
+
+**And the remedy fails a width before the mechanism does.** At 8 bits exempting
+the layer-0 MLP produces a *working model* — 1.45× its reference. At 6 bits the
+same exemption is still 39× better than its control and still specific, and
+leaves the model at **91.7×**. The damage is still concentrated in that tensor;
+fixing it alone has stopped being enough.
+
+**This also explains §5.5.** Per-token underflow on that one tensor runs
+**0.462 → 0.612 → 0.954** at 8, 6 and 4 bits. R5 reported that per-token
+scaling's absorption of sink damage weakens as the bit width falls and could not
+say why. That is why, at the tensor level: per-row scales take it from 99%
+underflow to 46% at 8 bits, 61% at 6, and 95% at 4 — where per-row scaling stops
+rescuing it too. Both corpora agree to within 6% throughout.
+
 **What is not.** *Why* training with an element-wise gate reshapes that
 particular tensor is unexplained; this locates the failure without accounting
 for its origin.

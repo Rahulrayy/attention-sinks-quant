@@ -40,6 +40,7 @@ standard §6 imposes on metric changes, applied to the plan itself.
 | C25 | §6, §9 | **`detected_sinks` had never been run either, and once run it is the `position_0` arm.** The tau selection round-tripped its own dict keys through `float`: the grid is written `"2"`…`"100"`, and `str(float("100"))` is `"100.0"`, so it raised `KeyError` on **every** checkpoint in the roster. Fixed and extracted from `main` to somewhere a test can reach. It is then **undefined** for both gated arms (no tau both flags and validates) and selects exactly `[0]` on the other three, making its 30 cells **bit-identical** to `position_0`. The taus that flag more — τ=2, up to 17 positions — all fail C17's attention gate | **A pre-registered arm collapses into an existing one** |
 | C26 | §4, §8, §11 | **C16 never reached the config or the Makefile, so `make measure` had never completed.** `configs/models.yaml` declared `prepend_bos: [true, false]` for all three gated arms after C16 established that no Qwen-arch checkpoint here has a `bos_token_id`, and the `measure` target issued `--prepend-bos` unconditionally — so it raised on `gated_1b_baseline`, its **first** model, on every invocation. Config now declares `[false]` for the four Qwen-arch checkpoints; the target asks the config instead of assuming. Third never-executed path in one session, after C24 and C25 | **A pre-registered sweep that could not run** |
 | C27 | §6, §9 | **C25's "undefined for both gated arms" was a two-draw claim, and the fifth draw breaks it.** The full 5-draw sweep shows `1B_elementwise`'s τ=2 pass **validates on 2 of 5 draws**, so the `detected_sinks` arm is constructible there — but the second position it admits is different every time (291, 19, 18, 375, 177) and never the same token twice. Head-wise is undefined on all five. `sink_free`, the outlier-channel counts and the three sink-bearing models' τ selections are all stable across five draws, so C24 and R10's main claim are untouched | **Qualifies a claim made the same day** |
+| C28 | §6 | **`dispersion` was never a bit-width-dependent number, and three documents said it was.** HANDOFF §11.2 listed `dispersion` alongside `eff_bits` and the underflow fractions as "computed against a specific integer grid", and LIMITATIONS §21 called the dispersion statistic bit-width-dependent by construction. It is `amax / median row amax` — a property of the tensor, not of the grid. Measured identical at 8, 6 and 4 bits across **1664** layer-observations, five models, both corpora, zero exceptions. Only `eff_bits` and `underflow_*` move | **Half of R6's headline statistic needed no re-run** |
 
 Findings that are *results* rather than corrections are marked **✎ RESULT**:
 [C12](#c12) (early preview on GPT-2), [R1](#r1) (the gated trio is sink-free),
@@ -959,6 +960,35 @@ attention-sinks-quant/
 > Two agreeing samples are not a stable quantity — they are two samples. The
 > correction was found within hours of the claim, by running the sweep the claim
 > had said was optional.
+
+> ### ✎ CORRECTION C28 — 2026-08-27 · a statistic assumed to depend on the grid, which does not
+>
+> §11.2 of the handoff set out the last open piece of the bit-width axis like
+> this: "`dispersion`, `eff_bits` and both underflow fractions are computed
+> against a specific integer grid, so every R6 number is an **8-bit** number on
+> **both** corpora." LIMITATIONS §21 said the same in fewer words.
+>
+> `dispersion` is `amax(tensor) / median(row amax)`. There is no grid in it. It
+> is a property of the tensor, and quantizing at 6 or 4 bits cannot change it.
+>
+> Measured rather than argued, because that is the whole point: across five
+> models, two corpora and three bit widths — **1664 layer-observations** — both
+> `dispersion` and `col_dispersion` are identical at 8, 6 and 4 bits, with zero
+> exceptions. `eff_bits` moves as expected (3.159 → 1.124 → 0.000 on the
+> element-wise layer-0 tensor) and so do both underflow fractions.
+>
+> **Consequence: the headline R6 number was never provisional.** "28.4× against
+> 1.6× on both siblings" is not an 8-bit number awaiting confirmation at other
+> widths; it is the tensor. What genuinely needed measuring at 6 and 4 bits was
+> the *underflow* half, and that turned out to carry the whole bit-width story
+> (R11).
+>
+> **How it happened, and it is the C23 move again.** The list was written by
+> reasoning about which quantities *ought* to involve a grid, and `dispersion`
+> sits in the same function, in the same output record, next to two that do. It
+> was never checked against the data it describes. C23 attributed a mechanism to
+> an axis without measuring the other axis; this asserted a dependence without
+> measuring the other widths. Both took under ten lines to test.
 
 ---
 

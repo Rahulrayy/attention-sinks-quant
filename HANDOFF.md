@@ -23,12 +23,12 @@ it.
 | Track B code (`train/`) | **~15%** — 9 stubs, unchanged |
 | Quantization grid | **360 cells** at 8/6/4-bit on FineWeb-Edu (60 of them this session's two exception arms, R9/R10), **+60** at 8/6/4-bit on the code corpus (+200 archived on the old corpus) |
 | Corpora | **3** committed — FineWeb-Edu (current), Python source (second-corpus arm), in-repo markdown (archived) |
-| Diagnostic runs | **23** — 14 web + 9 code, arm decomposition plus localisation tests |
-| Distribution runs | **10** — 5 per corpus, re-measured with the feature-axis statistic (C23) |
+| Diagnostic runs | **35** — 26 web + 9 code; the web set now covers 8, 6 and 4 bits (R11) |
+| Distribution runs | **30** — 15 web + 15 code, all five checkpoints at 8, 6 and 4 bits (R11) |
 | Sink measurement runs | **30** — the full sweep: 5 checkpoints × 5 draws no-BOS, plus GPT-2's BOS arm ×5. Four of five detector verdicts are draw-stable; the fifth is C27 |
 | LAMBADA runs | **15** — 3 arms × 5 checkpoints, 1000 examples, 8-bit |
 | Figures | **3** — `fig1_d_sink`, `fig2_bitwidth`, `fig3_lambada`, all from `analysis.figures` |
-| Corrections to the original plan | **27** |
+| Corrections to the original plan | **28** |
 | Limitations recorded | **24** |
 | Git | initialised 2026-08-25; the project was never a repository before |
 
@@ -76,6 +76,13 @@ moving, and this session was the prose.
   `sinks.measure --calib-seed 1` on all five checkpoints reproduces every
   decision — τ, positions, outlier counts, `sink_free`. The continuous metrics
   move a few percent and nothing crosses a boundary. Two draws, not five.
+- **R11 / C28 — R6 across bit widths, the last item on the next-steps list**
+  (§3). `dispersion` turned out never to have been grid-dependent (C28, 1664
+  layer-observations); the *discriminating* statistic decays 10.4× → 2.8× →
+  1.09× as the grid coarsens; the *intervention* holds at 6 bits with its
+  controls and loses specificity at 4; and the remedy stops working a width
+  before the mechanism does — 1.45× at 8 bits, 91.7× at 6. It also gives R5's
+  "the redundancy weakens" a tensor-level mechanism.
 - **C26 — the third unrun path, and this one is the sweep** (§7). `make measure`
   issued `--prepend-bos` to every model, and four of five have no BOS token
   (C16), so it raised on `gated_1b_baseline` — its first — on every invocation
@@ -646,6 +653,64 @@ selection on all three sink-bearing models — so the claim above, that
 code path with unit tests on its parts and no test of the path itself. That is
 the entry in §10 worth carrying forward.
 
+### R11 — R6 across bit widths: the mechanism outlives the remedy
+
+**§11.2, and it split into three answers rather than one.** 20 distribution runs
+(5 models × 2 corpora × 6 and 4 bits) and 12 diagnose runs at 6 and 4 bits.
+`python -m analysis.distributions --bits 6`, `--bits 4`.
+
+**1. Half the statistic never needed running (C28).** §11.2 said `dispersion`
+was computed against an integer grid and so was an 8-bit number. It is
+`amax / median row amax` — a property of the tensor. Identical at 8, 6 and 4
+bits across **1664** layer-observations, five models, both corpora, zero
+exceptions. `eff_bits` and the underflow fractions do move.
+
+**2. The discriminating statistic is genuinely an 8-bit statistic, and now
+quantifiably so.** Per-tensor underflow at the layer-0 MLP input:
+
+| corpus | 8-bit | 6-bit | 4-bit |
+|---|---|---|---|
+| web — element-wise / baseline | 0.9926 / 0.0957 = **10.4×** | 0.9991 / 0.3591 = **2.8×** | 0.9998 / 0.9134 = **1.09×** |
+| code — element-wise / baseline | 0.9916 / 0.1012 = **9.8×** | 0.9990 / 0.3791 = **2.6×** | 0.9998 / 0.9282 = **1.08×** |
+
+The siblings catch up as the grid coarsens; by 4 bits everything is at
+0.84–1.00 and the statistic separates nothing. Both corpora agree to within 6%,
+so this is the rare R6 claim that is corpus-stable *and* width-resolved.
+
+**3. The localisation survives to 6 bits with its controls, and dies at 4.**
+`a_only_dynamic`, element-wise, exempting the layer-0 MLP:
+
+| bits | control | block 0 exempt | vs control | 8 *other* blocks | sibling (head-wise) |
+|---|---|---|---|---|---|
+| 8 | +3481.54 (241×) | **+6.57 (1.45×)** | **530×** | 1.04× | 0.96× (worse) |
+| 6 | +50713.17 (3504×) | **+1313.36 (91.7×)** | **39×** | 0.90× (worse) | 1.10× |
+| 4 | +74795.22 (5167×) | +19577.65 (1353×) | 3.82× | **1.92×** | **2.81×** |
+
+At 4 bits the specificity is gone: eight unrelated blocks buy 1.92× and the same
+exemption on the *undamaged* sibling buys 2.81×, both the same order as the
+treatment's 3.82×. Exempting any three modules on any model helps a little when
+everything is drowning, which is not an experiment.
+
+**4. The remedy fails a width before the mechanism does.** At 8 bits the
+exemption produces a **working model** — 1.45× its reference. At 6 bits the same
+exemption is still 39× better than its control and still specific, and leaves
+the model at **91.7×**: destroyed. The layer-0 tensor is still where the damage
+concentrates; fixing it alone stops being sufficient because the rest of the
+network has started failing too.
+
+**5. And it gives R5 a mechanism.** Per-token underflow on that one tensor:
+**0.462 → 0.612 → 0.954** at 8, 6, 4 bits (web; code 0.426 → 0.598 → 0.957).
+R5 reported that per-token scaling's absorption of the damage weakens as bits
+fall and could not say why. This is why, at the tensor level: per-row scaling
+takes that tensor from 99% underflow to 46% at 8 bits, to 61% at 6, and to 95%
+at 4 — at which point per-row scales no longer rescue it either.
+
+**One thing deliberately not reported.** At 4 bits head-wise's control sits at
+22205× its reference and element-wise's at 5167×, which would invert the
+roster's damage ordering. Both are destroyed many times over, so that is a
+difference between two broken models and ranks nothing (LIMITATIONS §19). It is
+recorded here and used for nothing.
+
 ### What R3-rev corrected in R3 (unchanged, kept for the trail)
 
 | Claim in R3 | Fate |
@@ -1052,27 +1117,23 @@ fetched rather than committed, so a clean clone reproduces two figures and a
 message, not three figures. That is deliberate — a silent two-figure run would
 be worse — but it means `make repro` ordering matters: `lambada` before `figs`.
 
-### 2. R6 at 6 and 4 bits
+### 2. ~~R6 at 6 and 4 bits~~ — answered
 
-**The code corpus at 6 and 4 bits is done** (§3, C22) — that was the previous
-priority 1 and it is answered. What is left of the bit-width axis is the R6
-statistic itself: `dispersion`, `eff_bits` and both underflow fractions are
-computed against a specific integer grid, so every R6 number is an **8-bit**
-number on **both** corpora.
+**Done** (§3, R11 and C28). 20 distribution runs and 12 diagnose runs closed it,
+and it split into three answers: `dispersion` never depended on the grid at all
+(C28), the *discriminating* statistic is genuinely 8-bit and decays 10.4× → 2.8×
+→ 1.09×, and the *intervention* survives to 6 bits with its controls and loses
+specificity at 4. The remedy fails a width earlier than the mechanism does.
+
+**What the bit-width axis still does not have** is the code corpus's causal
+test. The 6- and 4-bit `--skip-modules` runs are FineWeb-Edu only; the code
+corpus has the distribution half at all three widths but the diagnose half at 8
+bits alone. Given C21's lesson — the interventional half is what travels — that
+is the gap most likely to be worth closing, and it is 12 runs:
 
 ```bash
-python -m quant.distributions --model <m> --bits 6                       # web
-python -m quant.distributions --model <m> --bits 6     --text-file data/code_python.txt --out runs/dist_code                # code
+python -m quant.diagnose --model gated_1b_elementwise --bits 6 --skip-coverage     --text-file data/code_python.txt --out runs/diag_code
 ```
-
-The question it answers: is the layer-0 tensor still where element-wise dies at
-6 bits, where per-tensor destroys **all five** models on code? The causal test
-(`quant.diagnose --skip-modules layers.0.mlp --bits 6`) is the half worth
-running — C21 and C22 between them establish that on this project the
-interventional half is what travels.
-
-Cheap: distributions quantize nothing, so it is one holdout pass per checkpoint
-per corpus.
 
 ### 3. ~~The exception arms~~ — closed
 

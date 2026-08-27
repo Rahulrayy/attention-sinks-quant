@@ -1062,3 +1062,25 @@ Prior work is credited claim by claim in Section 3. The three papers this audit
 is built against are Xiao et al. (StreamingLLM), Sun et al. (massive
 activations), and Qiu et al. (gated attention, NeurIPS 2025), whose released
 checkpoints are the controlled set that every result here rests on.
+
+## 9. License
+
+The code, documentation and generated results in this repository are released
+under the MIT License; see `LICENSE`.
+
+That covers what is original here. It does not cover three things, and none of
+them are mine to license:
+
+- **The corpora under `data/`.** `fineweb_edu.txt` is redistributed from
+  `HuggingFaceFW/fineweb-edu`, which is published under the Open Data Commons
+  Attribution License (ODC-By 1.0) and requires attribution.
+  `code_python.txt` is redistributed from `codeparrot/codeparrot-clean-valid`,
+  which is derived from public GitHub repositories; the individual files retain
+  the licences of the projects they came from. Both are committed rather than
+  regenerated because re-streaming gives a different document set, which would
+  be a different experiment; `data/README.md` has the provenance and hashes.
+- **The model weights.** The `gated_attention` checkpoints carry no declared
+  licence. They are used as released and are not redistributed here; nothing
+  under `data/` or `runs/` contains weights.
+- **The vendored modelling code** that sink measurement depends on, which is
+  pinned to an older transformers release and belongs to its authors.

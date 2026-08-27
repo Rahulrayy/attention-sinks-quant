@@ -1,5 +1,35 @@
 # Attention Sinks and Quantization: An Audit
 
+**Does fixing attention sinks in the architecture actually make a model easier
+to quantize? Mostly no, and the best-known fix makes one model far worse.**
+
+Three findings, measured on a controlled set of 1.7B checkpoints that differ by
+a single boolean in `config.json`:
+
+1. **The fix works** in the setting the literature was built against. On the
+   matched pair, sink-attributable damage under per-tensor 8-bit quantization
+   falls 55x, from +0.6450 to +0.0117 nats, for 0.1% extra parameters.
+2. **It is redundant** in the setting people actually deploy. Switching the
+   quantizer from per-tensor to per-token scaling buys the same 32-46x
+   reduction on every model, with no architecture change at all.
+3. **The standard metric points at the wrong model.** The gate variant with the
+   *lowest* sink mass is the only checkpoint that 8-bit per-tensor
+   quantization destroys — perplexity +3600 against an unquantized 14.5. The
+   cause is not the sink: it is one tensor at layer 0, and holding three of 196
+   modules in fp16 takes it from 241x its reference perplexity back to 1.45x.
+
+**Method in one sentence:** five checkpoints, 360 quantization grid cells on
+FineWeb-Edu plus a 60-cell replication on Python source, everything reported
+with bootstrap confidence intervals and regenerated from `runs/` by code rather
+than typed.
+
+![Figure 1: sink-attributable quantization damage](runs/results/fig1_d_sink.png)
+
+Section 1 has the detail. Sections 5.4 and 5.9 are the ones worth reading if
+you only read two. Section 6 lists what the work does not license.
+
+---
+
 > **Status: the inference-side audit is complete.** Five checkpoints were
 > measured end-to-end across 8, 6 and 4-bit activations: 360 grid cells on 281
 > FineWeb-Edu documents, a 60-cell replication at all three widths on a second
@@ -17,6 +47,12 @@
 > **deliberately cut**. Section 6 states what that leaves untested, and
 > `train/__init__.py` records which parts of it work and which are contract
 > only.
+>
+> **On the commit history.** The work ran over six sessions between 20 and 27
+> August 2026. Git was initialised on the 25th, part-way through, so the commit
+> log covers roughly the last third of it and the earlier sessions appear only
+> as their results and as the corrections log they produced. The dates in that
+> log are the real chronology.
 
 ---
 
@@ -61,10 +97,9 @@ fix works, the second says it is unnecessary, and the third says the
 best-known variant of it is harmful in the setting it was designed for. All
 three are true at once.
 
-![Figure 1: sink-attributable quantization damage](runs/results/fig1_d_sink.png)
-
-`D_sink` at 8-bit activations, in nats, with 95% sequence-bootstrap confidence
-intervals over the 32 held-out sequences. *ZERO* marks an interval that
+Figure 1 is at the top of this README. `D_sink` at 8-bit activations, in nats,
+with 95% sequence-bootstrap confidence intervals over the 32 held-out
+sequences. *ZERO* marks an interval that
 contains zero.
 
 | model | ppl_ref | Δppl (per-tensor) | per-tensor (2023) | per-token (modern) | ratio |

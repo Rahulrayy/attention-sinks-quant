@@ -23,7 +23,7 @@ it.
 | Track B code (`train/`) | **~15%** — 9 stubs, unchanged |
 | Quantization grid | **360 cells** at 8/6/4-bit on FineWeb-Edu (60 of them this session's two exception arms, R9/R10), **+60** at 8/6/4-bit on the code corpus (+200 archived on the old corpus) |
 | Corpora | **3** committed — FineWeb-Edu (current), Python source (second-corpus arm), in-repo markdown (archived) |
-| Diagnostic runs | **35** — 26 web + 9 code; the web set now covers 8, 6 and 4 bits (R11) |
+| Diagnostic runs | **47** — 26 web + 21 code, both corpora now at 8, 6 and 4 bits. The causal test agrees in every cell (R11) |
 | Distribution runs | **30** — 15 web + 15 code, all five checkpoints at 8, 6 and 4 bits (R11) |
 | Sink measurement runs | **30** — the full sweep: 5 checkpoints × 5 draws no-BOS, plus GPT-2's BOS arm ×5. Four of five detector verdicts are draw-stable; the fifth is C27 |
 | LAMBADA runs | **15** — 3 arms × 5 checkpoints, 1000 examples, 8-bit |
@@ -83,6 +83,10 @@ moving, and this session was the prose.
   controls and loses specificity at 4; and the remedy stops working a width
   before the mechanism does — 1.45× at 8 bits, 91.7× at 6. It also gives R5's
   "the redundancy weakens" a tensor-level mechanism.
+- **And the whole causal test re-run on the code corpus at 6 and 4 bits**, which
+  was the gap R11 left. Every cell agrees across corpora — the first bit-width
+  result here that needs no caveat about which corpus produced it. The
+  bit-width axis is closed.
 - **C26 — the third unrun path, and this one is the sweep** (§7). `make measure`
   issued `--prepend-bos` to every model, and four of five have no BOS token
   (C16), so it raised on `gated_1b_baseline` — its first — on every invocation
@@ -711,6 +715,40 @@ roster's damage ordering. Both are destroyed many times over, so that is a
 difference between two broken models and ranks nothing (LIMITATIONS §19). It is
 recorded here and used for nothing.
 
+#### R11 on the second corpus — every cell agrees
+
+12 more diagnose runs on `data/code_python.txt`, mirroring the web set exactly.
+This is the comparison C21 said to trust: an intervention with controls, run
+twice on different domains.
+
+| bits | quantity | web | code |
+|---|---|---|---|
+| 8 | block 0 MLP buys | **530×** | **3265×** |
+| 8 | 8 *other* blocks buy | 1.04× | 1.01× |
+| 8 | same exemption on head-wise | 0.96× | 1.07× |
+| 8 | model after the exemption | 1.5× ref | 1.4× ref |
+| 6 | block 0 MLP buys | **39×** | **151×** |
+| 6 | 8 *other* blocks buy | 0.90× | 1.01× |
+| 6 | same exemption on head-wise | 1.10× | 1.07× |
+| 6 | model after the exemption | **91.7× ref** | **142.5× ref** |
+| 4 | block 0 MLP buys | 3.82× | 5.11× |
+| 4 | 8 *other* blocks buy | **1.92×** | **2.64×** |
+| 4 | same exemption on head-wise | **2.81×** | **1.62×** |
+
+**Same verdict in every cell.** The intervention is *stronger* on code at all
+three widths. The specificity and sibling controls hold at 8 and 6 bits on both
+corpora and fail at 4 on both. The remedy stops producing a working model at 6
+bits on both. Nothing here needed a caveat about which corpus it was measured
+on, which is the first time in this project that has been true of a bit-width
+result — R5's thresholds and growth rates did not travel (C22) and R6's ranking
+did not (C21). The interventional half did, at every width.
+
+**The one asymmetry worth naming.** The intervention is 6× stronger on code at 8
+bits (3265× vs 530×) and 4× at 6 bits. That is not the intervention working
+better; it is the *control* being worse — element-wise on code is at 1297× its
+reference before any exemption against 241× on web, so there is more damage
+available to remove. Ratios against a larger control are larger.
+
 ### What R3-rev corrected in R3 (unchanged, kept for the trail)
 
 | Claim in R3 | Fate |
@@ -1125,15 +1163,11 @@ and it split into three answers: `dispersion` never depended on the grid at all
 → 1.09×, and the *intervention* survives to 6 bits with its controls and loses
 specificity at 4. The remedy fails a width earlier than the mechanism does.
 
-**What the bit-width axis still does not have** is the code corpus's causal
-test. The 6- and 4-bit `--skip-modules` runs are FineWeb-Edu only; the code
-corpus has the distribution half at all three widths but the diagnose half at 8
-bits alone. Given C21's lesson — the interventional half is what travels — that
-is the gap most likely to be worth closing, and it is 12 runs:
-
-```bash
-python -m quant.diagnose --model gated_1b_elementwise --bits 6 --skip-coverage     --text-file data/code_python.txt --out runs/diag_code
-```
+**And the code corpus's causal test is done too** — 12 more runs, mirroring the
+web set at 6 and 4 bits. Every cell agrees (§3, "R11 on the second corpus"):
+controls tight at 8 and 6 bits on both corpora, both controls failing at 4 on
+both, the intervention stronger on code at every width only because its control
+is worse. **The bit-width axis has nothing open on it.**
 
 ### 3. ~~The exception arms~~ — closed
 

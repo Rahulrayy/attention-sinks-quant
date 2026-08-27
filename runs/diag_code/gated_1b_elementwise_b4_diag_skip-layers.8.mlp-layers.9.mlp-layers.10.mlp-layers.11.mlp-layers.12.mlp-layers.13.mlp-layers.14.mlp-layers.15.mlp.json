@@ -1,0 +1,110 @@
+{
+  "model": "gated_1b_elementwise",
+  "bits": 4,
+  "ppl_ref": 5.347742413058776,
+  "seq_len": 256,
+  "calib_tokens": 2048,
+  "eval_tokens": 8192,
+  "calib_seed": 0,
+  "corpus": "data/code_python.txt",
+  "corpus_sha256": "21f9dee1f17187c2",
+  "holdout_sha": "24a4c1a29ef74e59",
+  "skip_modules": [
+    "layers.8.mlp",
+    "layers.9.mlp",
+    "layers.10.mlp",
+    "layers.11.mlp",
+    "layers.12.mlp",
+    "layers.13.mlp",
+    "layers.14.mlp",
+    "layers.15.mlp"
+  ],
+  "arms": [
+    {
+      "arm": "w_only",
+      "n_patched": 172,
+      "n_calibrated": 0,
+      "ppl_quant": 79.27512480126576,
+      "delta_ppl": 73.92738238820698,
+      "skip_modules": [
+        "layers.8.mlp",
+        "layers.9.mlp",
+        "layers.10.mlp",
+        "layers.11.mlp",
+        "layers.12.mlp",
+        "layers.13.mlp",
+        "layers.14.mlp",
+        "layers.15.mlp"
+      ]
+    },
+    {
+      "arm": "a_only_static",
+      "n_patched": 172,
+      "n_calibrated": 172,
+      "ppl_quant": 3987646.0827749823,
+      "delta_ppl": 3987640.735032569,
+      "skip_modules": [
+        "layers.8.mlp",
+        "layers.9.mlp",
+        "layers.10.mlp",
+        "layers.11.mlp",
+        "layers.12.mlp",
+        "layers.13.mlp",
+        "layers.14.mlp",
+        "layers.15.mlp"
+      ]
+    },
+    {
+      "arm": "a_only_dynamic",
+      "n_patched": 172,
+      "n_calibrated": 0,
+      "ppl_quant": 180929.44482349805,
+      "delta_ppl": 180924.097081085,
+      "skip_modules": [
+        "layers.8.mlp",
+        "layers.9.mlp",
+        "layers.10.mlp",
+        "layers.11.mlp",
+        "layers.12.mlp",
+        "layers.13.mlp",
+        "layers.14.mlp",
+        "layers.15.mlp"
+      ]
+    },
+    {
+      "arm": "a_only_per_token",
+      "n_patched": 172,
+      "n_calibrated": 0,
+      "ppl_quant": 11290.251145708819,
+      "delta_ppl": 11284.903403295759,
+      "skip_modules": [
+        "layers.8.mlp",
+        "layers.9.mlp",
+        "layers.10.mlp",
+        "layers.11.mlp",
+        "layers.12.mlp",
+        "layers.13.mlp",
+        "layers.14.mlp",
+        "layers.15.mlp"
+      ]
+    },
+    {
+      "arm": "full_static",
+      "n_patched": 172,
+      "n_calibrated": 172,
+      "ppl_quant": 3970625.342534205,
+      "delta_ppl": 3970619.994791792,
+      "skip_modules": [
+        "layers.8.mlp",
+        "layers.9.mlp",
+        "layers.10.mlp",
+        "layers.11.mlp",
+        "layers.12.mlp",
+        "layers.13.mlp",
+        "layers.14.mlp",
+        "layers.15.mlp"
+      ]
+    }
+  ],
+  "coverage": null
+}

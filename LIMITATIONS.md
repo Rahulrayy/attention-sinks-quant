@@ -405,12 +405,19 @@ all at 4, and both corpora agree to within 6%. So R6's *discriminating* claim is
 an 8-bit claim, said precisely rather than hedged.
 
 **What survives the width change is the intervention, down to 6 bits and not
-below.** Exempting the layer-0 MLP buys 530× at 8 bits, 39× at 6, and 3.82× at
-4 — where the specificity control (eight *other* blocks) buys 1.92× and the
-sibling control on head-wise buys 2.81×. At 4 bits exempting any three modules
-on any model helps a little, because everything is drowning; the experiment has
-stopped being an experiment. At 8 and 6 bits the controls hold and it is still
-one tensor.
+below — and it survives on both corpora.** Exempting the layer-0 MLP buys 530×
+at 8 bits, 39× at 6, and 3.82× at 4 on FineWeb-Edu; 3265×, 151× and 5.11× on
+Python source. The specificity control (eight *other* blocks) and the sibling
+control (the same exemption on head-wise) are both tight at 8 and 6 bits on both
+corpora — 1.04/1.01× and 0.90/1.01× for the first, 0.96/1.07× and 1.10/1.07× for
+the second — and both fail at 4 bits on both, at 1.92/2.64× and 2.81/1.62×. At 4
+bits exempting any three modules on any model helps a little, because everything
+is drowning; the experiment has stopped being an experiment.
+
+This is the only bit-width claim in the project that carries no corpus caveat.
+R5's thresholds and growth rates did not travel (§18, C22) and R6's cross-model
+ranking did not (C21). The interventional half did, at every width — which is
+the distinction those two corrections were filed to establish.
 
 **And the remedy fails before the mechanism does.** At 8 bits the exemption
 takes the element-wise arm to 1.45× its reference — a working model. At 6 bits

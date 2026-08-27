@@ -442,6 +442,25 @@ say why. That is why, at the tensor level: per-row scales take it from 99%
 underflow to 46% at 8 bits, 61% at 6, and 95% at 4 — where per-row scaling stops
 rescuing it too. Both corpora agree to within 6% throughout.
 
+**And the whole of it replicates on the second corpus.** The causal test was run
+again at 6 and 4 bits on Python source. Every cell agrees:
+
+| bits | block 0 buys | | 8 *other* blocks | | head-wise sibling | |
+|---|---|---|---|---|---|---|
+| | web | code | web | code | web | code |
+| 8 | 530× | 3265× | 1.04× | 1.01× | 0.96× | 1.07× |
+| 6 | 39× | 151× | 0.90× | 1.01× | 1.10× | 1.07× |
+| 4 | 3.82× | 5.11× | **1.92×** | **2.64×** | **2.81×** | **1.62×** |
+
+Controls tight at 8 and 6 bits on both corpora, both controls failing at 4 on
+both. This is the first bit-width result in this audit that needs no caveat
+about which corpus produced it — §5.5's thresholds did not travel (**C22**) and
+§5.4's ranking did not (**C21**). The intervention does, at every width.
+
+The intervention looks stronger on code only because its control is worse:
+element-wise sits at 1297× its reference there before any exemption against 241×
+on web, so there is more damage available to remove.
+
 **What is not.** *Why* training with an element-wise gate reshapes that
 particular tensor is unexplained; this locates the failure without accounting
 for its origin.

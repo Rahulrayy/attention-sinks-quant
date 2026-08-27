@@ -1,0 +1,56 @@
+{
+  "model": "gated_1b_headwise",
+  "bits": 4,
+  "ppl_ref": 5.268735260695477,
+  "seq_len": 256,
+  "calib_tokens": 2048,
+  "eval_tokens": 8192,
+  "calib_seed": 0,
+  "corpus": "data/code_python.txt",
+  "corpus_sha256": "21f9dee1f17187c2",
+  "holdout_sha": "24a4c1a29ef74e59",
+  "skip_modules": [],
+  "arms": [
+    {
+      "arm": "w_only",
+      "n_patched": 196,
+      "n_calibrated": 0,
+      "ppl_quant": 6.734389084927245,
+      "delta_ppl": 1.4656538242317678,
+      "skip_modules": []
+    },
+    {
+      "arm": "a_only_static",
+      "n_patched": 196,
+      "n_calibrated": 196,
+      "ppl_quant": 2137373.3286680174,
+      "delta_ppl": 2137368.0599327567,
+      "skip_modules": []
+    },
+    {
+      "arm": "a_only_dynamic",
+      "n_patched": 196,
+      "n_calibrated": 0,
+      "ppl_quant": 664604.0522059329,
+      "delta_ppl": 664598.7834706722,
+      "skip_modules": []
+    },
+    {
+      "arm": "a_only_per_token",
+      "n_patched": 196,
+      "n_calibrated": 0,
+      "ppl_quant": 455.040110731036,
+      "delta_ppl": 449.77137547034056,
+      "skip_modules": []
+    },
+    {
+      "arm": "full_static",
+      "n_patched": 196,
+      "n_calibrated": 196,
+      "ppl_quant": 1945644.2875888634,
+      "delta_ppl": 1945639.0188536027,
+      "skip_modules": []
+    }
+  ],
+  "coverage": null
+}

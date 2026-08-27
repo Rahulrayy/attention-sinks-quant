@@ -3,7 +3,7 @@
 Both files are committed rather than regenerated. The corpus swap changed the
 headline matched-pair reduction by ~5× and flipped two CIs across zero
 (R3 → R3-rev), so "re-stream a fresh sample" is *not* a reproduction of these
-numbers — it is a new experiment. See `LIMITATIONS.md` §18.
+numbers — it is a new experiment. See `README.md` §6.
 
 | File | Bytes | sha256 (first 32) | Docs | Used by |
 |---|---|---|---|---|

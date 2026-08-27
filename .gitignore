@@ -31,7 +31,7 @@ runs/lambada*/*
 
 # data/ IS committed. The corpus swap moved the headline by ~5x, so the exact
 # document set is part of the result, not an input that can be regenerated.
-# See data/README.md and LIMITATIONS.md §18.
+# See data/README.md and README.md §6.
 
 .venv/
 .idea/
@@ -41,3 +41,9 @@ __pycache__/
 *.bin
 *.safetensors
 *.memmap
+
+# Working documents: kept local, not published. The README is the deliverable
+# and is self-contained; these are the notebook behind it.
+/HANDOFF.md
+/LIMITATIONS.md
+/attention-sinks-quant-plan.md

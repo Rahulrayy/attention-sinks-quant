@@ -64,7 +64,7 @@ dist:
 	$(PY) -m analysis.distributions
 
 ## The second-corpus arm (R7, C21, C22). All three widths for the grid;
-## diagnose and distributions are 8-bit only, which LIMITATIONS §21 records.
+## diagnose and distributions now cover 8, 6 and 4 bits on both corpora.
 ## --text-file is the only difference from the `quant` target, and the
 ## provenance fields (corpus_sha256, holdout_sha) keep the grids distinguishable.
 corpus: gate

@@ -44,6 +44,27 @@ import torch
 # The corpus the committed results were measured on. Preferred over streaming a
 # fresh sample, because the corpus swap moved the headline by ~5x (data/README.md).
 DEFAULT_CORPUS = Path(__file__).resolve().parent.parent / "data" / "fineweb_edu.txt"
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+def provenance_path(path):
+    """How a corpus path is RECORDED in a run file, which is not how it is read.
+
+    Repo-relative and POSIX-separated when the corpus lives inside the repo, so
+    a run JSON does not carry the absolute path of whoever produced it. Runs are
+    compared on `corpus_sha256`, never on this string, so shortening it loses no
+    provenance -- and the absolute form had leaked a home directory into 246
+    files, 56 of them committed, before this function existed.
+
+    Anything outside the repo is recorded as given: there is no shorter form
+    that still identifies it.
+    """
+    if not path:
+        return path
+    try:
+        return Path(path).resolve().relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return str(path)
 
 
 def _int_list(spec: str) -> list[int]:
@@ -504,7 +525,8 @@ def main() -> None:
     corpus_path = ns.text_file or (str(DEFAULT_CORPUS) if DEFAULT_CORPUS.exists() else None)
     if corpus_path:
         text_source = load_corpus(corpus_path)
-        provenance = {"corpus": corpus_path, "corpus_sha256": _sha256_prefix(corpus_path)}
+        provenance = {"corpus": provenance_path(corpus_path),
+                      "corpus_sha256": _sha256_prefix(corpus_path)}
         print(f"corpus: {corpus_path}  sha256:{provenance['corpus_sha256']}")
     else:
         from datasets import load_dataset

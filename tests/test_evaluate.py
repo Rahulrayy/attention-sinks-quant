@@ -271,3 +271,36 @@ def test_a_sink_free_checkpoint_raises_rather_than_returning_nothing():
     validation = {"2": {"failed": "magnitude and attention disagree"}}
     with pytest.raises(ValueError, match="sink-free"):
         detected_sink_positions(detector_json(table, validation))
+
+
+# --- what a run file records as its corpus ----------------------------------
+#
+# The path is provenance, not an identifier: runs are compared on
+# `corpus_sha256`. Recording it absolutely put a home directory into 246 run
+# files, 56 of them committed, which is why this exists.
+
+from quant.evaluate import DEFAULT_CORPUS, REPO_ROOT, provenance_path  # noqa: E402
+
+
+def test_a_corpus_inside_the_repo_is_recorded_relative_and_posix():
+    got = provenance_path(str(DEFAULT_CORPUS))
+    assert got == "data/fineweb_edu.txt"
+    assert not got.startswith("/") and ":" not in got   # no drive letter, no root
+
+
+def test_an_already_relative_path_survives_unchanged():
+    assert provenance_path("data/code_python.txt") == "data/code_python.txt"
+
+
+def test_a_corpus_outside_the_repo_is_left_alone():
+    """There is no shorter form that still identifies it, so it is recorded as
+    given rather than mangled into something that resolves elsewhere."""
+    outside = str(REPO_ROOT.parent / "somewhere_else.txt")
+    assert provenance_path(outside) == outside
+
+
+def test_a_missing_corpus_stays_missing():
+    """The streamed arm records no path at all; it must not become the string
+    'None' or the repo root."""
+    assert provenance_path(None) is None
+    assert provenance_path("") == ""

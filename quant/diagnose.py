@@ -37,6 +37,7 @@ import torch
 
 from .evaluate import (
     DEFAULT_CORPUS,
+    provenance_path,
     _sha256_prefix,
     delta_ppl,
     holdout_sha,
@@ -231,7 +232,8 @@ def main() -> None:
                 "model": ns.model, "bits": ns.bits, "ppl_ref": ppl_ref,
                 "seq_len": ns.seq_len, "calib_tokens": ns.calib_tokens,
                 "eval_tokens": ns.eval_tokens, "calib_seed": ns.calib_seed,
-                "corpus": corpus, "corpus_sha256": _sha256_prefix(corpus),
+                "corpus": provenance_path(corpus),
+                "corpus_sha256": _sha256_prefix(corpus),
                 "holdout_sha": holdout_sha(slices.holdout),
                 "skip_modules": list(skip_modules),
                 "arms": results, "coverage": cov,

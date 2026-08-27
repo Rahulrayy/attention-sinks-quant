@@ -86,6 +86,7 @@ import torch
 
 from .evaluate import (
     DEFAULT_CORPUS,
+    provenance_path,
     _sha256_prefix,
     holdout_sha,
     load_corpus,
@@ -335,7 +336,7 @@ def main() -> None:
             {
                 "model": ns.model, "bits": ns.bits, "ppl_ref": ppl_ref,
                 "seq_len": ns.seq_len, "eval_tokens": ns.eval_tokens,
-                "calib_seed": ns.calib_seed, "corpus": corpus,
+                "calib_seed": ns.calib_seed, "corpus": provenance_path(corpus),
                 "corpus_sha256": _sha256_prefix(corpus),
                 "holdout_sha": holdout_sha(slices.holdout),
                 "summary": summary, "layers": layers,

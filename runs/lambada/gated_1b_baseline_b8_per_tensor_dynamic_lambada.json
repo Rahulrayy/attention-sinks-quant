@@ -6,7 +6,7 @@
   "n_examples_requested": 1000,
   "examples_sha": "6d0df26534c90e3f",
   "max_context": 512,
-  "calib_corpus": "C:\\Users\\rahul\\OneDrive\\Desktop\\LEIDEN SEM 2\\PERSONAL\\attention\\data\\fineweb_edu.txt",
+  "calib_corpus": "data/fineweb_edu.txt",
   "calib_corpus_sha256": "9c8501c905092716",
   "calib_seed": 0,
   "seq_len": 256,

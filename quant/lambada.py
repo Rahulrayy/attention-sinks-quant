@@ -51,7 +51,7 @@ from pathlib import Path
 
 import torch
 
-from .evaluate import DEFAULT_CORPUS, _sha256_prefix, load_corpus
+from .evaluate import DEFAULT_CORPUS, _sha256_prefix, load_corpus, provenance_path
 
 # The lm-eval-harness split. Detokenized (properly cased and punctuated), which
 # matters because a BPE tokenizer scores "n't" and " not" very differently.
@@ -316,7 +316,8 @@ def main() -> None:
             "dataset": DATASET, "config": CONFIG,
             "n_examples_requested": ns.n_examples, "examples_sha": sha,
             "max_context": ns.max_context,
-            "calib_corpus": corpus, "calib_corpus_sha256": _sha256_prefix(corpus),
+            "calib_corpus": provenance_path(corpus),
+            "calib_corpus_sha256": _sha256_prefix(corpus),
             "calib_seed": ns.calib_seed, "seq_len": ns.seq_len,
             "calib_tokens": ns.calib_tokens,
             **r,

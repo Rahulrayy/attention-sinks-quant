@@ -303,12 +303,14 @@ def main() -> None:
     # measuring them on different document sets would make that comparison
     # meaningless — and the earlier sink runs did exactly that, recording no
     # corpus at all (C19).
-    from quant.evaluate import DEFAULT_CORPUS, _sha256_prefix, load_corpus
+    from quant.evaluate import (DEFAULT_CORPUS, _sha256_prefix, load_corpus,
+                                provenance_path)
 
     corpus_path = ns.text_file or (str(DEFAULT_CORPUS) if DEFAULT_CORPUS.exists() else None)
     if corpus_path:
         text_source = load_corpus(corpus_path)
-        provenance = {"corpus": corpus_path, "corpus_sha256": _sha256_prefix(corpus_path)}
+        provenance = {"corpus": provenance_path(corpus_path),
+                      "corpus_sha256": _sha256_prefix(corpus_path)}
         print(f"corpus: {corpus_path}  sha256:{provenance['corpus_sha256']}")
     else:
         from datasets import load_dataset

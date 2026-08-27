@@ -470,3 +470,40 @@ reads concatenated head outputs and `down_proj` reads the MLP intermediate. A
 residual channel index means nothing on those two, so `ExceptionSpec` now
 carries the width it was measured at and skips them. Before that guard existed
 the indices were applied by coincidence to 56 of 196 modules — see C24.
+
+### 24. `detected_sinks` adds no degree of freedom to this grid
+The fourth exception arm was wired and run on 2026-08-27 (**C25**), after a key
+round-trip bug that had made it raise on every checkpoint since the first
+commit. What it produces is a null of the completest kind:
+
+| model | τ selected | positions | result |
+|---|---|---|---|
+| GPT-2 small | 50 | `[0]` | bit-identical to `position_0` |
+| Qwen3-0.6B-Base | 100 | `[0]` | bit-identical to `position_0` |
+| `1B_baseline` | 100 | `[0]` | bit-identical to `position_0` |
+| `1B_headwise` | — | — | arm undefined (§17) |
+| `1B_elementwise` | — | — | arm undefined (§17) |
+
+So the grid has three real exception arms, not four: `none`, the token axis, and
+the feature axis (§23). Nothing published changes — `D_sink` was always defined
+on `position_0` — but a reader should not count `detected_sinks` as independent
+evidence of anything.
+
+**What the null is about.** Three checkpoints, one detector, seq_len 256, and
+C17's attention-validation gate. The τ values that *do* find more than position
+0 — τ=2 flags 3 positions on Qwen3 and 17 on `1B_baseline` — all fail that gate,
+because most of the extra positions are not ones the heads attend to. The gate
+is doing its job, and §9's aside that "τ=2 over-flags on every model measured"
+turns out to be the whole story rather than a footnote.
+
+**What it is not.** Not a refutation of multi-level sinks, and specifically not
+of CushionCache, which motivated the multi-level detector in the first place.
+That work reports multi-level structure on other models at longer contexts. A
+256-token window on five checkpoints cannot speak to it, and this entry should
+not be cited as though it could.
+
+**And it is one calibration draw's detector output.** The exception list comes
+from `runs/sinks/<model>_calib0_nobos.json` — draw 0, no BOS — and is then held
+fixed across all five draws of the grid, so the arm inherits whatever that one
+detector pass saw. Re-running `sinks.measure` on another draw could in principle
+select a different τ; that has not been tested.

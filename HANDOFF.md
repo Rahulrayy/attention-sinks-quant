@@ -5,8 +5,10 @@
 last handoff named as all that stood between the repo and done are both
 discharged: R8 has a figure, and the C20–C23 corrections have been propagated
 into the documents where they had not reached. Then §11.3 was run and produced
-a finding rather than a number — **R9 / C24**, the feature-axis arm. Track B
-not started, and the recommendation is still to cut it.
+a finding rather than a number — **R9 / C24**, the feature-axis arm — and then
+**R10 / C25** closed the last one. All four pre-registered exception arms have
+now been executed. Track B not started, and the recommendation is still to cut
+it.
 **Authoritative sources:** `attention-sinks-quant-plan.md` §0 (corrections log), `LIMITATIONS.md`, `README.md`, `runs/results/`
 **Numbers:** every result table in the README is generated — `analysis.report` (§5.1–5.5), `analysis.distributions` (§5.4), `analysis.corpora` (§5.7), `analysis.lambada` (§5.8). Do not transcribe them by hand — that is how the README came to carry superseded figures for five days (C19 has the story). The same now goes for the repo map in §4: its line counts are read off the files, not remembered.
 
@@ -16,18 +18,18 @@ not started, and the recommendation is still to cut it.
 
 | | |
 |---|---|
-| Tests | **204 passing**, 16 files |
+| Tests | **209 passing**, 16 files |
 | Track A code (`sinks/`, `quant/`, `analysis/`) | **complete** — 0 stubs |
 | Track B code (`train/`) | **~15%** — 9 stubs, unchanged |
-| Quantization grid | **330 cells** at 8/6/4-bit on FineWeb-Edu (30 of them the feature-axis arm, R9), **+60** at 8/6/4-bit on the code corpus (+200 archived on the old corpus) |
+| Quantization grid | **360 cells** at 8/6/4-bit on FineWeb-Edu (60 of them this session's two exception arms, R9/R10), **+60** at 8/6/4-bit on the code corpus (+200 archived on the old corpus) |
 | Corpora | **3** committed — FineWeb-Edu (current), Python source (second-corpus arm), in-repo markdown (archived) |
 | Diagnostic runs | **23** — 14 web + 9 code, arm decomposition plus localisation tests |
 | Distribution runs | **10** — 5 per corpus, re-measured with the feature-axis statistic (C23) |
 | Sink measurement runs | **5** — one per checkpoint, draw 0, no-BOS |
 | LAMBADA runs | **15** — 3 arms × 5 checkpoints, 1000 examples, 8-bit |
 | Figures | **3** — `fig1_d_sink`, `fig2_bitwidth`, `fig3_lambada`, all from `analysis.figures` |
-| Corrections to the original plan | **24** |
-| Limitations recorded | **23** |
+| Corrections to the original plan | **25** |
+| Limitations recorded | **24** |
 | Git | initialised 2026-08-25; the project was never a repository before |
 
 ### Done since the previous handoff
@@ -63,6 +65,12 @@ moving, and this session was the prose.
   residual stream's width, and once both were fixed it came back **undefined for
   both gated checkpoints** and effective on **one of the three** where it can be
   run. 30 new cells. README §5.9, LIMITATIONS §23.
+- **R10 / C25 — the fourth arm, and the second never-executed path** (§3).
+  `detected_sinks` raised `KeyError` on every checkpoint: its τ selection
+  round-tripped integer dict keys through `float`. Fixed, extracted somewhere a
+  test can reach, and run — it is **undefined** for both gated arms and
+  **bit-identical to `position_0`** on the other three. The grid has three real
+  exception arms, not four. README §5.9, LIMITATIONS §24.
 - **The repo map's line counts are now read off the files.** Seven of the
   twenty-two rows were stale, `analysis/report.py` by 40 lines. A table of
   remembered numbers, in a project whose thesis is "generate, do not
@@ -565,6 +573,44 @@ running ahead of measurements. This is an arm named in the plan, listed in the
 Makefile grid, unit-tested in isolation, and never once executed end to end.
 Unit tests on a component are not evidence that a pipeline exists. §10.
 
+### R10 — the fourth arm, and what it collapses into
+
+**C24's closing line was that unit tests on a component are not evidence that a
+pipeline exists. The other unrun arm proved it within the hour.**
+
+`detected_sinks` picks the largest τ that both flags tokens and passes C17's
+attention gate. The selection sorted `float(x) for x in table` then indexed
+`table[str(t)]` — and the τ grid is written `"2"`…`"100"`, so `str(float("100"))`
+is `"100.0"`, not a key. `KeyError` on **every checkpoint in the roster**. It sat
+inside `main()` where no test could reach it. Now
+`quant.evaluate.detected_sink_positions`, with five tests, the first an
+integer-keyed grid (**C25**).
+
+| model | τ | positions | arm |
+|---|---|---|---|
+| GPT-2 small | 50 | `[0]` | = `position_0` |
+| Qwen3-0.6B-Base | 100 | `[0]` | = `position_0` |
+| `1B_baseline` | 100 | `[0]` | = `position_0` |
+| `1B_headwise` | — | — | **undefined** |
+| `1B_elementwise` | — | — | **undefined** |
+
+**The cells are bit-identical to `position_0`**, `delta_ppl` and per-sequence
+arrays alike — verified across all 30, not assumed from the position list. The
+τ values that find more all fail the gate: τ=2 flags 3 positions on Qwen3 and 17
+on `1B_baseline`, and most of them are not tokens the heads attend to. §9's
+aside that "τ=2 over-flags on every model measured" turns out to be the whole
+story.
+
+**So the grid has three real exception arms, not four** — `none`, the token
+axis, the feature axis. Nothing published moves; `D_sink` was always
+`position_0`. It is a null about three checkpoints, one detector and a 256-token
+window, and **not** a refutation of the multi-level sink work that motivated the
+detector. LIMITATIONS §24.
+
+**Both never-run arms are now run, and both were broken in the same way:** a
+code path with unit tests on its parts and no test of the path itself. That is
+the entry in §10 worth carrying forward.
+
 ### What R3-rev corrected in R3 (unchanged, kept for the trail)
 
 | Claim in R3 | Fate |
@@ -590,7 +636,7 @@ project root, not a subfolder layout).
 | `quant/fakequant.py` | 169 | done | Quant/dequant, scale derivation, `scale_source` exclusion, static scale from amax |
 | `quant/patch.py` | 389 | done | `QuantLinear`, Conv1D support, exception specs, observation mode, patch/restore |
 | `quant/calibrate.py` | 188 | done | Disjoint corpus slicing, batching, BOS policy, static range collection |
-| `quant/evaluate.py` | 688 | done | Per-token NLL, `D_sink` decomposition, `evaluate_cell`, `run_grid`, `--grid` CLI, corpus loading |
+| `quant/evaluate.py` | 711 | done | Per-token NLL, `D_sink` decomposition, `evaluate_cell`, `run_grid`, `--grid` CLI, corpus loading |
 | `quant/diagnose.py` | 245 | done | Arm decomposition, range-coverage table, projection exemption |
 | `quant/distributions.py` | 349 | done | Per-layer dispersion on **both** axes, effective bits, per-granularity underflow. Quantizes nothing (R6, C23) |
 | `quant/lambada.py` | 331 | done | `lambada_openai` greedy exact-match; paired per-example arrays and the discordant count (R8) |
@@ -892,6 +938,13 @@ gitignored figure is a broken image in the README, and `runs/diag/` and
   way since the first commit. Before believing an arm exists, execute it end to
   end once — the tests it passes are the tests someone wrote for the part that
   worked.
+- **Test the path, not just the parts** (C24, C25). Both never-run exception
+  arms were broken, in different ways, behind green unit tests: one had no
+  caller building its mask, the other round-tripped its own dict keys through
+  `float` and raised on every checkpoint. Neither defect was reachable by any
+  test, because the logic sat in `main()`. Both are now extracted to functions
+  a test can call. If a code path has never been executed end to end, assume it
+  does not work, whatever its components' coverage says.
 - **A bounds check is not a meaning check** (C24). Channel indices from a
   2048-wide residual stream are all "in range" on a 6144-wide MLP intermediate,
   so a clip accepted them and would have exempted 56 of 196 modules by
@@ -967,35 +1020,23 @@ interventional half is what travels.
 Cheap: distributions quantize nothing, so it is one holdout pass per checkpoint
 per corpus.
 
-### 3. `detected_sinks` — the one exception arm still never run
+### 3. ~~The exception arms~~ — closed
 
-**`outlier_channels` is done.** It was the live finding under this heading and
-it is now R9 / C24 (§3): wired, run on all five checkpoints, 30 cells, written
-up in README §5.9 and LIMITATIONS §23. It needed no re-measurement — the mask
-comes from the per-channel maxima the sink runs already record.
+**Both are done.** `outlier_channels` is R9/C24 and `detected_sinks` is
+R10/C25 (§3). Four arms named in the plan, four executed, and the grid turns
+out to have **three** real degrees of freedom rather than four: `none`, the
+token axis, the feature axis. 60 new cells this session.
 
-`detected_sinks` is what is left, and it is one command per model:
+Nothing published moved. What changed is that two pre-registered arms stopped
+being unknowns — one produced a finding (the feature axis is model-specific and
+undefined on the model that most needed it), the other collapsed into an arm
+that already existed.
 
-```bash
-python -m quant.evaluate --model <m> --grid --bits-list 8     --granularities per_tensor,per_token --exceptions detected_sinks --seeds 0,1,2,3,4     --seq-len 256 --calib-tokens 2048 --eval-tokens 8192     --sinks-json runs/sinks/<m>_calib0_nobos.json
-```
-
-Pass all five seeds even to fill one: draws are positional prefixes, so `--seeds
-0` builds one draw and `slices.draw(3)` then raises. Draw *i* is byte-identical
-either way, which `ppl_ref` matching to six decimals confirms.
-
-**What to expect, and what would be surprising.** It will be undefined for both
-gated arms, for the reason LIMITATIONS §17 gives — no sinks, nothing to exempt —
-so it runs on three models like R9 did. On those three it should land *between*
-`position_0` and nothing: it exempts a superset of position 0, so a result
-*worse* than `position_0` would mean the extra positions cost more range than
-they buy, which is exactly what R9 saw happen on the feature axis for GPT-2 and
-Qwen3. That is the interesting outcome and the one worth looking for.
-
-**The comparison that makes it worth running at all** is now three-way rather
-than two: token axis narrow (`position_0`), token axis wide (`detected_sinks`),
-feature axis (`outlier_channels`). R9 established the third column on one model
-of three. The second is the only cell of that table still empty.
+**If anyone reopens this**, the only untested knob left is the one LIMITATIONS
+§24 names: the exception list comes from draw 0's detector pass and is held
+fixed across all five draws. Another draw could in principle select a different
+τ. Cheap to check — `sinks.measure --calib-seed 1` and compare the selected τ —
+and it has not been checked.
 
 ### 4. Track B, if it happens at all
 

@@ -527,6 +527,10 @@ behind 10× is in `HANDOFF.md` §12.
   gated checkpoints for the same reason — the gate left no outlier channel to
   exempt — and buys nothing on two of the three models where it can be run
   (§5.9, **C24**).
+- `detected_sinks` is undefined for the same two, and on the other three it
+  selects exactly position 0, so its cells are bit-identical to the
+  `position_0` arm. The grid has three real exception arms, not four
+  (§5.9, **C25**).
 
 ### 5.7 Corpus sensitivity: what survives a change of domain
 
@@ -787,6 +791,40 @@ per-tensor 8-bit, a residual-stream outlier channel is **not** it. That is
 consistent with §5.4, which located the failure in a tensor the residual-stream
 detector does not watch. LIMITATIONS §23 has what the arm does not license,
 including the fact that it is one channel and not a set.
+
+#### And the fourth arm turns out to be the first one
+
+`detected_sinks` — hold every position the multi-level detector flags, not just
+position 0 — was the last arm never run. It had the same shape of defect
+(**C25**): the τ selection round-tripped its own dict keys through `float`, and
+since the grid is written `"2"`…`"100"` while `str(float("100"))` is `"100.0"`,
+it raised on **every** checkpoint. Not an edge case — the only case. It lived
+inside `main()` where no test could reach it, which is why five sessions of a
+green suite said nothing about it.
+
+Run, it selects:
+
+| model | τ | positions | arm |
+|---|---|---|---|
+| GPT-2 small | 50 | `[0]` | = `position_0` |
+| Qwen3-0.6B-Base | 100 | `[0]` | = `position_0` |
+| `1B_baseline` | 100 | `[0]` | = `position_0` |
+| `1B_headwise` | — | — | **undefined** |
+| `1B_elementwise` | — | — | **undefined** |
+
+On all three sink-bearing models the validated detector output *is* position 0,
+so the arm's cells come out **bit-identical** to the `position_0` cells —
+`Δppl` and per-sequence arrays alike, checked rather than assumed. The τ values
+that find more (τ=2 flags 3 positions on Qwen3, 17 on `1B_baseline`) all fail
+the attention-validation gate: most of what they flag is not a token the heads
+attend to. That gate exists because an earlier version of this project nearly
+shipped without it, and this is it earning its place.
+
+**So the grid has three real exception arms, not four** — `none`, the token
+axis, the feature axis. Nothing published moves, because `D_sink` was always
+defined on `position_0`. But this is a null about *three checkpoints, one
+detector and a 256-token window*, and specifically **not** a refutation of the
+multi-level sink literature that motivated the detector (§2). LIMITATIONS §24.
 
 ## 6. Limitations
 

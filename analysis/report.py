@@ -110,6 +110,10 @@ def markdown(cells: dict, *, bits: int, seed: int = 0,
             f"{_fmt(r.get('per_token'))} | {ratio} |"
         )
     if undefined:
+        # Each arm has its own limitations entry for the same failure on its own
+        # axis; pointing at the wrong one sends a reader to the wrong table.
+        where = {"outlier_channels": "§17, and §23 for the feature axis",
+                 "detected_sinks": "§17, and §24 for this arm"}.get(exception, "§17")
         lines += [
             "",
             "No `" + exception + "` cell exists for " +
@@ -117,7 +121,7 @@ def markdown(cells: dict, *, bits: int, seed: int = 0,
             ". That is not a missing run: the arm cannot be constructed for a "
             "model the detector flags nothing on, so there is nothing to hold "
             "in fp16 and the difference would be a spurious zero "
-            "(LIMITATIONS §17, and §23 for this axis).",
+            f"(LIMITATIONS {where}).",
         ]
     if any(r.get("per_tensor_destroyed") or r.get("per_token_destroyed") for r in table):
         lines += [

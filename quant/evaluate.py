@@ -299,6 +299,41 @@ def d_sink_from_means(none: dict, exempt: dict) -> dict[str, float]:
     }
 
 
+def detected_sink_positions(sinks: dict) -> tuple[str, list[int]]:
+    """Pick the tau whose flagged positions become the `detected_sinks` arm.
+
+    Returns ``(tau_key, positions)``. Raises ValueError when no tau qualifies,
+    which on a sink-free checkpoint is the answer rather than a failure
+    (LIMITATIONS 17).
+
+    Take the LARGEST tau that both flags something and validates against
+    attention. Largest is the conservative end: it admits only the tokens whose
+    magnitude is most clearly anomalous, so the exception list does not quietly
+    absorb borderline positions and inflate D_sink.
+
+    Extracted from `main` because that is where it was, unreachable by any test,
+    while it round-tripped its own dict keys through float and raised KeyError
+    on every checkpoint in the roster. The tau grid is written "2", "5", ...,
+    "100"; `str(float("100"))` is "100.0", which is not a key. Sort by numeric
+    tau, index by the original key, and let a test hold it there.
+    """
+    kind = sinks.get("primary_detector", "layerwise")
+    table = sinks["detector"][kind]
+    validation = sinks.get("detector_validation", {}).get(kind, {})
+
+    candidates = [
+        key for key in sorted(table, key=float, reverse=True)
+        if table[key]["n_flagged"] > 0 and "failed" not in validation.get(key, {})
+    ]
+    if not candidates:
+        raise ValueError(
+            "no tau both flagged sinks and passed attention validation, so this "
+            "arm cannot be built for this checkpoint. On a sink-free model that "
+            "is the answer, not an error (LIMITATIONS §17)."
+        )
+    return candidates[0], list(table[candidates[0]]["positions"])
+
+
 def outlier_mask_from_sinks(sinks: dict, *, threshold: float = 100.0):
     """Build the `outlier_channels` mask from a runs/sinks JSON. -> bool (C,).
 
@@ -509,23 +544,11 @@ def main() -> None:
             raise SystemExit("--fp16-exception detected_sinks requires --sinks-json")
         with open(ns.sinks_json, encoding="utf-8") as fh:
             sinks = json.load(fh)
-        kind = sinks.get("primary_detector", "layerwise")
-        table = sinks["detector"][kind]
-        validation = sinks.get("detector_validation", {}).get(kind, {})
-        # Take the LARGEST tau that both flags something and validates against
-        # attention. Largest is the conservative end: it admits only the tokens
-        # whose magnitude is most clearly anomalous, so the exception list does
-        # not quietly absorb borderline positions and inflate D_sink.
-        candidates = [
-            t for t in sorted((float(x) for x in table), reverse=True)
-            if table[str(t)]["n_flagged"] > 0 and "failed" not in validation.get(str(t), {})
-        ]
-        if not candidates:
-            raise SystemExit(
-                f"{ns.sinks_json}: no tau both flagged sinks and passed attention "
-                "validation. Re-run sinks.measure before building an exception list."
-            )
-        positions = table[str(candidates[0])]["positions"]
+        try:
+            tau, positions = detected_sink_positions(sinks)
+        except ValueError as exc:
+            raise SystemExit(f"{ns.sinks_json}: {exc}") from exc
+        print(f"detected_sinks: tau={tau} positions={positions}", flush=True)
         sink_mask = torch.zeros(1, ns.seq_len, dtype=torch.bool)
         sink_mask[0, [p for p in positions if p < ns.seq_len]] = True
 

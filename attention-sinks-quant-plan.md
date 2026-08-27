@@ -37,6 +37,7 @@ standard §6 imposes on metric changes, applied to the plan itself.
 | C22 | §6 | **R5's "single exception" was corpus-dependent, and its 115× was a rounding artefact.** Head-wise's 6-bit per-tensor cell sits at 8.7× its reference on FineWeb-Edu and **12.4×** on code, so it survives on one corpus and is destroyed on the other — the only destroyed-status flip anywhere between the two grids. The element-wise 8→6 growth figure was 111×, not 115×: two 4-decimal display values were divided. R5's *direction* claims travel; its thresholds and growth rates do not | **Qualifies a claim, fixes a number** |
 | C23 | §6, §7 | **R6's mechanism was attributed to the wrong axis.** The element-wise layer-0 tensor is extreme on *both* axes — row dispersion 28.4× and **feature dispersion 304×** against 1.6× / 6–9× on its siblings — and the feature axis is the more dispersed one on **every** model in the roster, including the least damaged. Per-feature underflow is flat and near zero everywhere, so it discriminates nothing. The localisation and its controls are unaffected | **Corrects an explanation, not a measurement** |
 | C24 | §6, §7, §9 | **The `outlier_channels` arm had no end-to-end path, and where it now has one it is undefined for two of five checkpoints.** `quant.evaluate` never built an `outlier_mask`, so selecting the arm raised; `sinks.measure` imported the detector and never called it. Wired 2026-08-27 by deriving the mask from the per-layer `channel_max` the sink runs already record — no re-measurement needed. At the locked 100× threshold it flags **1** channel on each sink-bearing model and **0** on both gated arms, which have no massive activations left to flag. A second defect the wiring exposed: one `ExceptionSpec` goes to every patched module, and a residual-stream channel index is meaningless on the 56 of 196 modules that read a different feature axis | **Kills an axis on 2 of 5 models** |
+| C25 | §6, §9 | **`detected_sinks` had never been run either, and once run it is the `position_0` arm.** The tau selection round-tripped its own dict keys through `float`: the grid is written `"2"`…`"100"`, and `str(float("100"))` is `"100.0"`, so it raised `KeyError` on **every** checkpoint in the roster. Fixed and extracted from `main` to somewhere a test can reach. It is then **undefined** for both gated arms (no tau both flags and validates) and selects exactly `[0]` on the other three, making its 30 cells **bit-identical** to `position_0`. The taus that flag more — τ=2, up to 17 positions — all fail C17's attention gate | **A pre-registered arm collapses into an existing one** |
 
 Findings that are *results* rather than corrections are marked **✎ RESULT**:
 [C12](#c12) (early preview on GPT-2), [R1](#r1) (the gated trio is sink-free),
@@ -823,6 +824,55 @@ attention-sinks-quant/
 > worse: an arm named in the plan, listed in the Makefile grid, and unit-tested
 > in isolation, which had never once been executed. Unit tests on a component
 > are not evidence that a pipeline exists.
+
+> ### ✎ CORRECTION C25 — 2026-08-27 · the second never-executed arm, and what it collapses into
+>
+> C24's last paragraph said unit tests on a component are not evidence that a
+> pipeline exists. The other unrun arm proved the point within the hour.
+>
+> **The defect.** `detected_sinks` picks the largest τ that both flags tokens
+> and passes C17's attention-validation gate. The selection sorted
+> `float(x) for x in table` and then indexed `table[str(t)]`. The τ grid is
+> written `"2"`, `"5"`, `"10"`, `"20"`, `"50"`, `"100"`; `str(float("100"))` is
+> `"100.0"`, which is not a key. It raised `KeyError` on **every checkpoint in
+> the roster** — not an edge case, the only case. The logic lived inside
+> `main()` where no test could reach it, which is why five sessions of a green
+> suite said nothing. It is now `quant.evaluate.detected_sink_positions`, with
+> five tests, the first of which is an integer-keyed grid.
+>
+> **What it produces once it runs.**
+>
+> | model | τ selected | positions | arm |
+> |---|---|---|---|
+> | GPT-2 small | 50 | `[0]` | = `position_0` |
+> | Qwen3-0.6B-Base | 100 | `[0]` | = `position_0` |
+> | `1B_baseline` | 100 | `[0]` | = `position_0` |
+> | `1B_headwise` | — | — | **undefined** |
+> | `1B_elementwise` | — | — | **undefined** |
+>
+> On all three sink-bearing models the detector's validated output is exactly
+> position 0, so the arm is not merely *similar* to `position_0` — its 30 cells
+> are **bit-identical**, `delta_ppl` and per-sequence arrays alike. Verified
+> rather than assumed, which is the only reason it is worth stating.
+>
+> **The taus that find more do not survive the gate.** τ=2 flags 3 positions on
+> Qwen3, 17 on `1B_baseline`, 6 on head-wise and 2 on element-wise — and every
+> one of those fails validation because most of the flagged tokens are not
+> tokens the heads actually attend to. That is C17's gate doing precisely the
+> job it was built for, and §9's note that "τ=2 over-flags on every model
+> measured" turning out to be load-bearing rather than incidental.
+>
+> **What this does and does not say.** On this roster, at seq_len 256, with this
+> detector, multi-level sinks do not survive validation: the only position that
+> does is the one the literature already names. That is a null result about
+> three checkpoints and one detector — it is **not** a refutation of CushionCache,
+> which motivated the multi-level detector in the first place (§2) and which
+> reports its multi-level structure on different models and longer contexts.
+>
+> **The consequence for the audit.** The exception-arm axis is now closed: four
+> arms named in §6, all four executed, and the grid's real degrees of freedom
+> are three, not four — `none`, the token axis, the feature axis. `D_sink` was
+> always the token axis and remains so; nothing that has been published moves.
 
 ---
 

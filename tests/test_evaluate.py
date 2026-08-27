@@ -209,3 +209,65 @@ def test_an_outlier_free_model_yields_an_empty_mask_rather_than_a_guess():
     checkpoint, not a failure of the derivation."""
     mask = outlier_mask_from_sinks(sinks_json([[1.0] * 8, [1.2] * 8]), threshold=100.0)
     assert mask.sum().item() == 0
+
+
+# --- which tau becomes the detected_sinks arm --------------------------------
+#
+# This selection lived inside `main()`, where no test could reach it, and it
+# round-tripped its own dict keys through float: the grid is written "2" ...
+# "100", and `str(float("100"))` is "100.0", which is not a key. It raised
+# KeyError on every checkpoint in the roster and nothing caught it, because the
+# arm had never been executed. Extracted so these can hold it.
+
+from quant.evaluate import detected_sink_positions  # noqa: E402
+
+
+def detector_json(table, validation=None, kind="layerwise"):
+    return {"primary_detector": kind, "detector": {kind: table},
+            "detector_validation": {kind: validation or {}}}
+
+
+def flagged(tau, positions):
+    return {"tau": tau, "n_flagged": len(positions), "positions": positions}
+
+
+def test_an_integer_keyed_tau_grid_is_selectable():
+    """The regression. Keys are written as integers; a float round trip loses
+    them. If this fails with KeyError, the arm is unrunnable again."""
+    table = {"2": flagged(2, [0, 7]), "10": flagged(10, [0]), "100": flagged(100, [0])}
+    tau, positions = detected_sink_positions(detector_json(table))
+    assert tau == "100" and positions == [0]
+
+
+def test_the_largest_validated_tau_wins():
+    """Largest is the conservative end: it admits only the tokens whose
+    magnitude is most clearly anomalous, so the exception list cannot quietly
+    absorb borderline positions and inflate D_sink."""
+    table = {"5": flagged(5, [0, 3, 9]), "20": flagged(20, [0, 3]), "50": flagged(50, [0])}
+    assert detected_sink_positions(detector_json(table))[0] == "50"
+
+
+def test_a_tau_that_failed_attention_validation_is_skipped():
+    """C17's gate. Magnitude flagging a token the heads do not attend to breaks
+    the attribution chain, and such a tau must not supply the exception list."""
+    table = {"10": flagged(10, [0, 5]), "50": flagged(50, [0, 99])}
+    validation = {"50": {"failed": "magnitude and attention disagree"}}
+    tau, positions = detected_sink_positions(detector_json(table, validation))
+    assert tau == "10" and positions == [0, 5]
+
+
+def test_a_tau_that_flagged_nothing_is_skipped():
+    """Empty is not a candidate: the arm would be identical to `none` and its
+    D_sink a spurious zero."""
+    table = {"10": flagged(10, [0]), "100": flagged(100, [])}
+    assert detected_sink_positions(detector_json(table))[0] == "10"
+
+
+def test_a_sink_free_checkpoint_raises_rather_than_returning_nothing():
+    """Both gated arms are this case: tau=2 over-flags and fails validation,
+    every larger tau flags nothing. There is no exception list to build, and
+    that is the answer rather than an error (LIMITATIONS 17)."""
+    table = {"2": flagged(2, [0, 291]), "5": flagged(5, []), "10": flagged(10, [])}
+    validation = {"2": {"failed": "magnitude and attention disagree"}}
+    with pytest.raises(ValueError, match="sink-free"):
+        detected_sink_positions(detector_json(table, validation))

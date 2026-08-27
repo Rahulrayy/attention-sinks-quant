@@ -1,12 +1,13 @@
 # Handoff — Attention Sinks and Quantization: An Audit
 
-**Date:** 26 August 2026 (fifth session)
-**State:** Track A complete, stress-tested, and now confirmed on a metric that
-is not perplexity. The plan's last pre-registered Track-A commitment (one
-downstream task) is discharged. Track B not started — and the case for cutting
-it is now stronger than it was.
+**Date:** 27 August 2026 (sixth session)
+**State:** Track A complete and **shipped**. The two non-measurement items the
+last handoff named as all that stood between the repo and done are both
+discharged: R8 has a figure, and the C20–C23 corrections have been propagated
+into the documents where they had not reached. Track B not started, and the
+recommendation is still to cut it.
 **Authoritative sources:** `attention-sinks-quant-plan.md` §0 (corrections log), `LIMITATIONS.md`, `README.md`, `runs/results/`
-**Numbers:** every result table in the README is generated — `analysis.report` (§5.1–5.5), `analysis.distributions` (§5.4), `analysis.corpora` (§5.7). Do not transcribe them by hand — that is how the README came to carry superseded figures for five days (C19 has the story).
+**Numbers:** every result table in the README is generated — `analysis.report` (§5.1–5.5), `analysis.distributions` (§5.4), `analysis.corpora` (§5.7), `analysis.lambada` (§5.8). Do not transcribe them by hand — that is how the README came to carry superseded figures for five days (C19 has the story). The same now goes for the repo map in §4: its line counts are read off the files, not remembered.
 
 ---
 
@@ -14,7 +15,7 @@ it is now stronger than it was.
 
 | | |
 |---|---|
-| Tests | **180 passing**, 16 files |
+| Tests | **190 passing**, 17 files |
 | Track A code (`sinks/`, `quant/`, `analysis/`) | **complete** — 0 stubs |
 | Track B code (`train/`) | **~15%** — 9 stubs, unchanged |
 | Quantization grid | **300 cells** at 8/6/4-bit on FineWeb-Edu, **+60** at 8/6/4-bit on the code corpus (+200 archived on the old corpus) |
@@ -23,11 +24,44 @@ it is now stronger than it was.
 | Distribution runs | **10** — 5 per corpus, re-measured with the feature-axis statistic (C23) |
 | Sink measurement runs | **5** — one per checkpoint, draw 0, no-BOS |
 | LAMBADA runs | **15** — 3 arms × 5 checkpoints, 1000 examples, 8-bit |
+| Figures | **3** — `fig1_d_sink`, `fig2_bitwidth`, `fig3_lambada`, all from `analysis.figures` |
 | Corrections to the original plan | **23** |
 | Limitations recorded | **22** |
 | Git | initialised 2026-08-25; the project was never a repository before |
 
 ### Done since the previous handoff
+
+**No new measurement.** The only thing that changed under `runs/` is one new
+PNG; Figures 1 and 2 regenerated to byte-identical files. That is the point: the
+last handoff argued the project had converged and only the prose was still
+moving, and this session was the prose.
+
+- **Figure 3** — `analysis.figures.fig_lambada`, the README's only panel that is
+  not perplexity, embedded in §5.8. The fp16 score is a grey rule, the quantized
+  score a marker, and the bar is the **paired** bootstrap on the drop laid onto
+  the accuracy axis. `lambada_rows` splits the geometry out from the drawing so
+  the figure's numbers can be asserted against the table beside it — ten tests
+  in `tests/test_figures.py`, including the one that matters: a drop interval
+  laid on an accuracy axis has its ends **swapped**, and getting that backwards
+  draws a plausible bar in the wrong place.
+- **The C23 propagation, which is the finding of the read-through.** README §1
+  and §5.4's "what is now established" both still called the element-wise
+  failure *row-magnitude dispersion* — the attribution C23 retracted — and §5.4
+  did so twenty-five lines *below* its own paragraph retracting it. Both now
+  name the statistic that actually discriminates: per-tensor underflow, 99.3%
+  against 9.6% on the same tensor in the ungated baseline.
+- **Four more claims that were true when written and had stopped being true.**
+  README's status header said the code corpus was 20 cells at 8 bits (it is 60,
+  at all three widths, since C22); README §6 said LIMITATIONS had 20 entries (22)
+  and described the corpus sensitivity as *one swap not yet bounded* (R7 bounded
+  it); this handoff's own R5 paragraph still quoted **115×** forty lines above
+  the C22 note correcting it to 111×.
+- **The repo map's line counts are now read off the files.** Seven of the
+  twenty-two rows were stale, `analysis/report.py` by 40 lines. A table of
+  remembered numbers, in a project whose thesis is "generate, do not
+  transcribe", was the wrong thing to leave behind.
+
+### Done in the session before that
 
 - **R8 — LAMBADA** (§3), the plan's last unfulfilled Track-A commitment and the
   only metric in this project that is not perplexity. All three headline claims
@@ -42,7 +76,7 @@ it is now stronger than it was.
   `lambada_openai` protocol, validated against a published number (GPT-2 small
   0.3070 here vs ~0.326 on the full split).
 
-### Done in the session before that
+### And in the one before that
 
 - **C23 — R6's mechanism was attributed to the wrong axis** (§3). The
   element-wise layer-0 tensor is extreme on *both* axes and **more** so on the
@@ -96,7 +130,7 @@ it is now stronger than it was.
 - **`analysis/distributions.py`** (308 lines) — the R6 tables, joined against
   the damage they must explain.
 
-### Done earlier
+### And earliest
 
 - **6-bit grid** — 100 cells, the width that handoff named as the single
   genuinely open question. It has an answer (§3).
@@ -259,9 +293,11 @@ is why searching `q_proj` and `o_proj` found nothing.
 
 **The redundancy weakens, unevenly, and the answer is qualified.** From 8 to 6
 bits the damage grows 3–4× on GPT-2 and Qwen3 — crossing into
-distinguishable-from-zero on GPT-2 — and 115× on element-wise. It does *not*
-grow on the controlled pair: baseline falls back across zero, head-wise stays
-there. Three of five exclude zero at 6 bits against two of five at 8.
+distinguishable-from-zero on GPT-2 — and **111×** on element-wise (C22: this
+paragraph said 115× until the ratio was computed from data rather than from a
+4-decimal table cell). It does *not* grow on the controlled pair: baseline falls
+back across zero, head-wise stays there. Three of five exclude zero at 6 bits
+against two of five at 8.
 
 So the redundancy result is **an 8-bit result** with a thinner margin at 6, and
 nothing here rescues the mitigation claim — the arms carrying the controlled
@@ -478,20 +514,20 @@ project root, not a subfolder layout).
 | `sinks/hooks.py` | 304 | done | Forward hooks reducing to scalars in-hook; the `output_attentions` null-out fix; Pébay online moments |
 | `sinks/metrics.py` | 125 | done | Sink mass, head entropy, ∞-norms, outlier channels, excess kurtosis, received attention |
 | `sinks/detector.py` | 196 | done | Layer-relative and aggregate detectors, τ sweep, attention validation gate |
-| `sinks/measure.py` | 339 | done | Track-A CLI; `resolve_model_path`; the Day-2 gate; corpus provenance |
+| `sinks/measure.py` | 341 | done | Track-A CLI; `resolve_model_path`; the Day-2 gate; corpus provenance |
 | `quant/fakequant.py` | 169 | done | Quant/dequant, scale derivation, `scale_source` exclusion, static scale from amax |
 | `quant/patch.py` | 361 | done | `QuantLinear`, Conv1D support, exception specs, observation mode, patch/restore |
 | `quant/calibrate.py` | 188 | done | Disjoint corpus slicing, batching, BOS policy, static range collection |
 | `quant/evaluate.py` | 619 | done | Per-token NLL, `D_sink` decomposition, `evaluate_cell`, `run_grid`, `--grid` CLI, corpus loading |
-| `quant/diagnose.py` | 246 | done | Arm decomposition, range-coverage table, projection exemption |
-| `quant/distributions.py` | 330 | done | Per-layer dispersion on **both** axes, effective bits, per-granularity underflow. Quantizes nothing (R6, C23) |
+| `quant/diagnose.py` | 245 | done | Arm decomposition, range-coverage table, projection exemption |
+| `quant/distributions.py` | 349 | done | Per-layer dispersion on **both** axes, effective bits, per-granularity underflow. Quantizes nothing (R6, C23) |
 | `quant/lambada.py` | 331 | done | `lambada_openai` greedy exact-match; paired per-example arrays and the discordant count (R8) |
-| `analysis/aggregate.py` | 211 | done | runs/ → dataframes; reconstructs `D_sink`; the comparability guard |
+| `analysis/aggregate.py` | 218 | done | runs/ → dataframes; reconstructs `D_sink`; the comparability guard |
 | `analysis/stats.py` | 165 | done | Paired bootstrap, sequence bootstrap, variance-source reporting |
-| `analysis/figures.py` | 251 | done | Figure 1, bit-width figure; zero-crossing hollow, destroyed cells hatched |
-| `analysis/report.py` | 192 | done | The README's tables; per-width and per-bit-width views |
-| `analysis/distributions.py` | 380 | done | R6 tables joined to the damage they explain; `--sweep` finds the thresholds where the ranking fails, `--axis` reports both dispersion axes (C23) |
-| `analysis/corpora.py` | 396 | done | Cross-corpus join; per-claim stability verdicts computed rather than asserted, and `--bitwidth` maps every sentence of §5.5 to a number (R7, C21, C22) |
+| `analysis/figures.py` | 417 | done | Figures 1–3; zero-crossing hollow, destroyed cells hatched, floored accuracy cells named. `lambada_rows` splits Figure 3's geometry out so it can be asserted against the tables |
+| `analysis/report.py` | 232 | done | The README's tables; per-width and per-bit-width views |
+| `analysis/distributions.py` | 370 | done | R6 tables joined to the damage they explain; `--sweep` finds the thresholds where the ranking fails, `--axis` reports both dispersion axes (C23) |
+| `analysis/corpora.py` | 433 | done | Cross-corpus join; per-claim stability verdicts computed rather than asserted, and `--bitwidth` maps every sentence of §5.5 to a number (R7, C21, C22) |
 | `analysis/lambada.py` | 265 | done | Accuracy beside the Δppl it should track; `--ranks` compares the two orderings, `--power` prints each cell's resolution (R8) |
 | `train/attention.py` | 82 | **partial** | `softmax1` and `OutputGate` work; `CausalSelfAttention` stubbed |
 | `train/model.py` | 28 | **stub** | nanoGPT-ish decoder — contract only |
@@ -517,6 +553,7 @@ project root, not a subfolder layout).
 | `test_corpora.py` | The headline reduction refuses a zero-crossing numerator; the ranking check reports "no threshold" when the order inverts, and does not credit an all-zero column |
 | `test_lambada.py` | The logits alignment (an off-by-one grades every model on the token AFTER the answer and looks fine); the target's leading space; all-or-nothing scoring across multi-token answers; the discordant counter tracks damage |
 | `test_lambada_report.py` | Cancellation is not agreement; the saturation floor fires; the dynamic control keeps its own key; resolution widens as the sample shrinks |
+| `test_figures.py` | Figure 3's interval ends swap when a DROP interval is laid on an ACCURACY axis; the floor and the interval are the ones `analysis.lambada` owns, not copies; a model missing an arm is dropped rather than half-drawn; two bit widths in one call are refused rather than captioned with one of them; the deferred import keeps `figures`↔`lambada` acyclic |
 
 ---
 
@@ -558,6 +595,12 @@ python -m sinks.measure --model gpt2_small --calib-seed 0 --seq-len 512 --n-batc
 # resumable after a crash or a tool timeout.
 python -m quant.evaluate --model gpt2_small --grid --bits-list 8,6,4 \
     --seq-len 256 --calib-tokens 2048 --eval-tokens 8192
+
+# R8: the downstream task. Fetches the split on first run -- it is not
+# committed. Figure 3 comes from these, so run it before analysis.figures or
+# that step prints a named skip and produces two figures instead of three.
+python -m quant.lambada --model gpt2_small --bits 8 --n-examples 1000 --dynamic
+python -m analysis.lambada
 
 python -m analysis.aggregate && python -m analysis.figures && python -m analysis.report
 
@@ -788,26 +831,33 @@ gitignored figure is a broken image in the README, and `runs/diag/` and
 
 ## 11. Next steps, in priority order
 
-### 1. Ship it, or cut Track B
+### 1. It is shipped. Decide about Track B and stop.
 
-**Promoted, and it is now the honest recommendation rather than an option.**
-
-LAMBADA was the plan's last unfulfilled Track-A commitment and it is done (§3,
-R8). Track A now has seven findings, three corpora, three bit widths, two
-metrics, 23 logged corrections and 180 tests. The audit has an answer to the
-question it was built to ask, and the last four sessions produced **no new
-findings** — they produced four corrections to how existing findings were
-worded, plus one confirmation. That is what a project looks like when the
-measurements have converged and only the prose is still moving.
+**Done, not pending.** The two items the last handoff put under this heading —
+a figure for R8 and a read-through for corrections that had reached one document
+and not another — were this session's work and are both discharged (§1). Track A
+has seven findings, three corpora, three bit widths, two metrics, 23 logged
+corrections, 190 tests and three generated figures. The README is the paper and
+nothing in it is now known to be stale.
 
 The plan's own de-scoping section pre-registered cutting Track B first and
-shipping the inference-only audit. Everything below this line is optional; this
-is not.
+shipping the inference-only audit. That is still the recommendation, and the
+case has only got stronger: the last five sessions produced **no new findings**
+— four corrections to how existing findings were worded, one confirmation on a
+second metric, and one pass of editorial repair. A project whose measurements
+have converged is finished; continuing to reread it is not the same as adding
+to it.
 
-What "shipping" means concretely: the README is already the paper. What it
-lacks is a figure for R8 (`analysis/figures.py` has no accuracy panel), and a
-final read-through for claims that C20–C23 corrected in one document but not
-another. Neither is a measurement.
+**What would change that verdict.** Not more prose. The three items below are
+real measurements with real answers, in the order their answers are worth
+having. §11.3 is the one that could still produce a finding rather than a
+number, because it is the only one where the outcome is genuinely unknown.
+
+**One trap for whoever ships it.** `analysis.figures` now needs `runs/lambada`
+for Figure 3 and prints a named skip if it is missing. The LAMBADA split is
+fetched rather than committed, so a clean clone reproduces two figures and a
+message, not three figures. That is deliberate — a silent two-figure run would
+be worse — but it means `make repro` ordering matters: `lambada` before `figs`.
 
 ### 2. R6 at 6 and 4 bits
 
@@ -866,8 +916,8 @@ here and the arm can be reported as a null and closed.
 
 See §11.1 — the recommendation is now to cut it. Kept here for the case where
 that call goes the other way. The plan's de-scoping section says cut Track B
-first and ship the inference-only audit; Track A's state makes that option
-is live and legitimate. If Track B does happen, `softmax1` is the arm worth the
+first and ship the inference-only audit, and Track A's state makes that option
+live and legitimate. If Track B does happen, `softmax1` is the arm worth the
 compute — widely cited, never evaluated with seeds — and the scaling identity is
 already implemented and tested.
 

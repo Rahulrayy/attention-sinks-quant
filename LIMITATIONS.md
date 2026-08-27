@@ -2,7 +2,8 @@
 
 Written before the results exist, which is the only way this document stays
 honest. Items 7-9 were added on 2026-08-20 after the Day-0 checkpoint audit;
-items 18-20 on 2026-08-25, after the corpus swap and the 6-bit run.
+items 18-20 on 2026-08-25, after the corpus swap and the 6-bit run; items 21-22
+on 2026-08-26, with the layer-0 localisation and the downstream task.
 
 ### 1. No rotation-based quantization
 QuaRot / SpinQuant-style Hadamard rotation is arguably the strongest modern

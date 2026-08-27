@@ -2,6 +2,9 @@
 
 Figure 1 is D_sink per model x activation granularity with bootstrap CIs. It
 goes directly under the finding in the README, before any architecture prose.
+Figure 2 is the same quantity against bit width. Figure 3 leaves perplexity
+entirely and plots LAMBADA accuracy, which is the only panel here a reader can
+interpret without knowing what a nat is.
 
 Two conventions this module enforces rather than leaves to the caller:
 
@@ -241,10 +244,173 @@ def fig_bitwidth(cells: dict, out: str = "runs/results/fig2_bitwidth.png", width
     return p
 
 
+def lambada_rows(runs: dict) -> list[dict]:
+    """Everything Figure 3 draws, as numbers, before any of it becomes ink.
+
+    Split out from `fig_lambada` so the figure's geometry can be asserted
+    against the tables in `analysis.lambada` rather than eyeballed in a PNG. A
+    figure that disagreed with the table beside it is the failure mode C19 had
+    in a different form: two paths to the same number, only one of them checked.
+
+    Draw order, bottom row first, so the caller's y index is the list index.
+    """
+    from .lambada import SATURATION_FLOOR, drop_interval
+
+    models = ordered_models({m for m, _ in runs})[::-1]  # first model on top
+    models = [m for m in models
+              if (m, "per_tensor") in runs and (m, "per_token") in runs]
+    if not models:
+        raise ValueError("no model has both a per-tensor and a per-token LAMBADA cell")
+
+    rows = []
+    for m in models:
+        for gran in ("per_tensor", "per_token"):
+            r = runs[(m, gran)]
+            iv = drop_interval(r)
+            rows.append({
+                "model": m,
+                "gran": gran,
+                "acc_ref": r["accuracy_ref"],
+                "acc": r["accuracy_quant"],
+                "drop": iv.point,
+                # The drop's interval, mapped onto the accuracy axis. hi drop =
+                # lo accuracy, so the ends swap.
+                "ci_lo": r["accuracy_ref"] - iv.hi,
+                "ci_hi": r["accuracy_ref"] - iv.lo,
+                "null": iv.crosses_zero,
+                "floored": r["accuracy_quant"] <= SATURATION_FLOOR,
+            })
+    return rows
+
+
+def fig_lambada(runs: dict, *, out: str = "runs/results/fig3_lambada.png"):
+    """The only figure here that is not perplexity: LAMBADA accuracy, by arm.
+
+    Reads the same cells `analysis.lambada` tabulates, and shows the one thing a
+    table of five-decimal drops does not: how far each model falls, on a scale
+    where the reader already knows what the numbers mean.
+
+    Three conventions, each inherited from a mistake this project already made.
+
+      * The fp16 score is drawn as a grey rule across the row, not as a third
+        bar. The quantity of interest is the FALL from it, and a chart of three
+        adjacent bars invites reading the two quantized arms against each other
+        while the reference floats somewhere behind them.
+      * The interval belongs to the DROP, not to the accuracy. It is the paired
+        bootstrap over examples that `analysis.lambada.drop_interval` computes,
+        mapped back onto the accuracy axis as `acc_ref - [hi, lo]`. Bootstrapping
+        the two accuracies separately would throw the pairing away, which is
+        trap 9.8 in a second metric. One visible consequence, left in rather
+        than clipped: every resample varies the REFERENCE too, so a bar drawn
+        against the full-sample `acc_ref` can extend slightly past 0 on a cell
+        at the floor. That is the interval the pairing actually produces.
+      * A cell at the accuracy floor is annotated, not merely plotted low. Once a
+        model is at chance the metric has stopped ordering anything, and nothing
+        about a short bar says so.
+
+    `analysis.lambada` imports from this module, so the reverse edge is deferred
+    to call time. The floor and the interval are single-sourced there on purpose:
+    a second definition of either would be free to drift from the tables.
+
+    The bit width is read off the cells rather than passed in. A `bits=`
+    argument that only reached the title would let a caller label an 8-bit
+    figure as 6-bit, which is a caption that lies about its own data.
+    """
+    from .lambada import SATURATION_FLOOR
+
+    rows = lambada_rows(runs)
+    models = list(dict.fromkeys(r["model"] for r in rows))
+
+    widths = {runs[(r["model"], r["gran"])].get("bits") for r in rows}
+    if len(widths) != 1:
+        raise ValueError(f"cells span more than one bit width: {sorted(widths)}")
+    bits = widths.pop()
+
+    fig, ax = plt.subplots(figsize=(10.0, 0.95 * len(models) + 3.1))
+    h = 0.34
+
+    for i, m in enumerate(models):
+        acc_ref = runs[(m, "per_tensor")]["accuracy_ref"]
+        # One grey rule per model: the score every arm in the row falls from.
+        ax.plot([acc_ref, acc_ref], [i - h, i + h],
+                color="#404040", lw=2.0, solid_capstyle="butt", zorder=4)
+        for j, gran in enumerate(("per_tensor", "per_token")):
+            row = next(r for r in rows if r["model"] == m and r["gran"] == gran)
+            y = i + (h / 2 if j == 0 else -h / 2)
+            acc, null, floored = row["acc"], row["null"], row["floored"]
+            ci_lo, ci_hi = row["ci_lo"], row["ci_hi"]
+
+            # The fall, drawn from the reference rule to the quantized score.
+            ax.plot([acc, acc_ref], [y, y], color=GRAN_COLOUR[gran],
+                    lw=1.2, alpha=0.55, zorder=2)
+            # The CI is on the drop; on this axis that is acc_ref - [hi, lo].
+            ax.plot([ci_lo, ci_hi], [y, y],
+                    color=GRAN_COLOUR[gran], lw=2.6, solid_capstyle="round",
+                    alpha=0.45 if null else 1.0, zorder=3)
+            ax.scatter([acc], [y], s=62, zorder=5,
+                       marker="X" if floored else "o",
+                       facecolor="white" if (null and not floored) else GRAN_COLOUR[gran],
+                       edgecolor=GRAN_COLOUR[gran], linewidth=1.8)
+
+            # The floor note is lifted clear of the row: it is long, and at the
+            # floor the drop bar runs the full width of the axes underneath it.
+            note = ("at the accuracy floor — the metric has stopped ordering" if floored
+                    else "CI crosses zero" if null else None)
+            if note:
+                ax.annotate(note, (ci_hi, y), xytext=(10, 11 if floored else 0),
+                            textcoords="offset points", va="center", fontsize=8,
+                            color="#b91c1c" if floored else GRAN_COLOUR[gran],
+                            style="italic")
+
+    ax.axvline(SATURATION_FLOOR, color="#b91c1c", lw=0.9, ls=":", zorder=1)
+    ax.annotate(f"accuracy floor ({SATURATION_FLOOR:.0%})", (SATURATION_FLOOR, len(models) - 0.45),
+                xytext=(4, 0), textcoords="offset points", fontsize=7.5,
+                color="#b91c1c", va="center")
+    ax.set_yticks(range(len(models)))
+    ax.set_yticklabels([short(m) for m in models], fontsize=9)
+    # The extra room below the bottom row is where the legend goes, so it never
+    # lands on top of the element-wise per-token marker at 0.59.
+    ax.set_ylim(-1.25, len(models) - 0.3)
+    ax.set_xlim(-0.02, 0.80)
+    ax.set_xlabel("LAMBADA accuracy (greedy exact-match on the final word)")
+    ax.set_title(
+        f"What {bits}-bit activation quantization costs in behaviour\n"
+        "grey rule = fp16; marker = quantized; bar = 95% paired bootstrap on the drop",
+        fontsize=11, loc="left",
+    )
+    handles = [plt.Line2D([], [], color="#404040", lw=2.0, label="fp16 reference")]
+    handles += [
+        plt.Line2D([], [], color=GRAN_COLOUR[g], lw=2.6, marker="o",
+                   markerfacecolor=GRAN_COLOUR[g], label=GRAN_LABEL[g])
+        for g in ("per_tensor", "per_token")
+    ]
+    ax.legend(handles=handles, loc="lower right", frameon=False, fontsize=9)
+    ax.spines[["top", "right", "left"]].set_visible(False)
+    ax.grid(axis="x", alpha=0.25, lw=0.6)
+    fig.tight_layout()
+
+    p = Path(out)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(p, dpi=160)
+    plt.close(fig)
+    return p
+
+
 def main() -> None:
+    from .lambada import load_runs
+
     cells = load_cells()
     print("wrote", fig1_d_sink(cells, bits=8))
     print("wrote", fig_bitwidth(cells))
+
+    # Figure 3 needs `runs/lambada`, which the grid does not produce. Say so
+    # rather than exiting 0 with two figures where the README expects three.
+    runs = load_runs()
+    if runs:
+        print("wrote", fig_lambada(runs))
+    else:
+        print("skipped fig3: no LAMBADA runs under runs/lambada "
+              "(python -m quant.lambada --model <m> ...)")
 
 
 if __name__ == "__main__":

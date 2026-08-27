@@ -152,3 +152,60 @@ def test_perplexity_and_nats_agree_on_sign():
 def test_delta_nll_is_zero_for_identical_runs():
     x = nll()
     assert delta_nll(x, x) == pytest.approx(0.0)
+
+
+# --- the outlier_channels mask, derived rather than stored --------------------
+#
+# `sinks.measure` records the raw statistic (per-layer channel_max) and this
+# derives the mask from it at read time. The alternative -- writing a mask into
+# the measurement JSON -- would put a derived quantity beside the thing it comes
+# from, free to disagree with it the moment the threshold moves.
+
+from quant.evaluate import outlier_mask_from_sinks  # noqa: E402
+
+
+def sinks_json(rows):
+    return {"residual": [{"name": f"model.layers.{i}", "channel_max": r}
+                         for i, r in enumerate(rows)]}
+
+
+def test_the_mask_comes_from_the_recorded_per_layer_maxima():
+    rows = [[1.0] * 8, [1.0] * 8]
+    rows[1][3] = 500.0
+    mask = outlier_mask_from_sinks(sinks_json(rows), threshold=100.0)
+    assert mask.shape == (8,)
+    assert mask[3] and mask.sum().item() == 1
+
+
+def test_the_threshold_belongs_to_the_arm_not_the_measurement():
+    """Same JSON, two thresholds, two masks. This is why the mask is not stored
+    next to the maxima: one file would have to pick a threshold forever."""
+    rows = [[1.0] * 8, [1.0] * 8]
+    rows[1][3] = 500.0
+    rows[1][6] = 50.0
+    assert outlier_mask_from_sinks(sinks_json(rows), threshold=100.0).sum() == 1
+    assert outlier_mask_from_sinks(sinks_json(rows), threshold=20.0).sum() == 2
+
+
+def test_rows_of_different_widths_are_refused():
+    """They index one residual stream. Ragged rows mean the JSON is not what
+    this function thinks it is, and silently truncating would build a mask over
+    the wrong channels."""
+    with pytest.raises(ValueError, match="disagree on width"):
+        outlier_mask_from_sinks(sinks_json([[1.0] * 8, [1.0] * 4]))
+
+
+def test_a_sinks_json_without_channel_max_is_an_error_not_an_empty_mask():
+    """An empty mask would raise later, in resolve_fp16_exceptions, with a
+    message about the model instead of about the file that was missing."""
+    with pytest.raises(ValueError, match="no per-layer channel_max"):
+        outlier_mask_from_sinks({"residual": [{"name": "model.layers.0"}]})
+
+
+def test_an_outlier_free_model_yields_an_empty_mask_rather_than_a_guess():
+    """The gated arms are this case at the locked threshold: the gate removed
+    the massive activations, so there is no channel to exempt. The mask comes
+    back empty and the CALLER decides what that means -- it is a fact about the
+    checkpoint, not a failure of the derivation."""
+    mask = outlier_mask_from_sinks(sinks_json([[1.0] * 8, [1.2] * 8]), threshold=100.0)
+    assert mask.sum().item() == 0

@@ -1,11 +1,12 @@
 # Handoff — Attention Sinks and Quantization: An Audit
 
-**Date:** 27 August 2026 (sixth session)
+**Date:** 27 August 2026 (sixth session, continued)
 **State:** Track A complete and **shipped**. The two non-measurement items the
 last handoff named as all that stood between the repo and done are both
 discharged: R8 has a figure, and the C20–C23 corrections have been propagated
-into the documents where they had not reached. Track B not started, and the
-recommendation is still to cut it.
+into the documents where they had not reached. Then §11.3 was run and produced
+a finding rather than a number — **R9 / C24**, the feature-axis arm. Track B
+not started, and the recommendation is still to cut it.
 **Authoritative sources:** `attention-sinks-quant-plan.md` §0 (corrections log), `LIMITATIONS.md`, `README.md`, `runs/results/`
 **Numbers:** every result table in the README is generated — `analysis.report` (§5.1–5.5), `analysis.distributions` (§5.4), `analysis.corpora` (§5.7), `analysis.lambada` (§5.8). Do not transcribe them by hand — that is how the README came to carry superseded figures for five days (C19 has the story). The same now goes for the repo map in §4: its line counts are read off the files, not remembered.
 
@@ -15,18 +16,18 @@ recommendation is still to cut it.
 
 | | |
 |---|---|
-| Tests | **190 passing**, 17 files |
+| Tests | **204 passing**, 16 files |
 | Track A code (`sinks/`, `quant/`, `analysis/`) | **complete** — 0 stubs |
 | Track B code (`train/`) | **~15%** — 9 stubs, unchanged |
-| Quantization grid | **300 cells** at 8/6/4-bit on FineWeb-Edu, **+60** at 8/6/4-bit on the code corpus (+200 archived on the old corpus) |
+| Quantization grid | **330 cells** at 8/6/4-bit on FineWeb-Edu (30 of them the feature-axis arm, R9), **+60** at 8/6/4-bit on the code corpus (+200 archived on the old corpus) |
 | Corpora | **3** committed — FineWeb-Edu (current), Python source (second-corpus arm), in-repo markdown (archived) |
 | Diagnostic runs | **23** — 14 web + 9 code, arm decomposition plus localisation tests |
 | Distribution runs | **10** — 5 per corpus, re-measured with the feature-axis statistic (C23) |
 | Sink measurement runs | **5** — one per checkpoint, draw 0, no-BOS |
 | LAMBADA runs | **15** — 3 arms × 5 checkpoints, 1000 examples, 8-bit |
 | Figures | **3** — `fig1_d_sink`, `fig2_bitwidth`, `fig3_lambada`, all from `analysis.figures` |
-| Corrections to the original plan | **23** |
-| Limitations recorded | **22** |
+| Corrections to the original plan | **24** |
+| Limitations recorded | **23** |
 | Git | initialised 2026-08-25; the project was never a repository before |
 
 ### Done since the previous handoff
@@ -56,6 +57,12 @@ moving, and this session was the prose.
   and described the corpus sensitivity as *one swap not yet bounded* (R7 bounded
   it); this handoff's own R5 paragraph still quoted **115×** forty lines above
   the C22 note correcting it to 111×.
+- **R9 / C24 — the feature-axis arm, wired and run** (§3). §11.3's live finding
+  turned out to be two defects and a result: the arm had no end-to-end path at
+  all, its channel indices were being applied to modules that do not share the
+  residual stream's width, and once both were fixed it came back **undefined for
+  both gated checkpoints** and effective on **one of the three** where it can be
+  run. 30 new cells. README §5.9, LIMITATIONS §23.
 - **The repo map's line counts are now read off the files.** Seven of the
   twenty-two rows were stale, `analysis/report.py` by 40 lines. A table of
   remembered numbers, in a project whose thesis is "generate, do not
@@ -493,6 +500,71 @@ perplexity hides.
 That is a measurement; 0.0000 across 0 discordant pairs would be its absence.
 C18 in a second metric. LIMITATIONS §22 has the rest.
 
+### R9 — the feature axis, and the arm that could not be run where it mattered
+
+**§11.3's live question, answered — and not by either branch it offered.** The
+`outlier_channels` arm had no end-to-end path: implemented and unit-tested in
+`quant/patch.py`, never buildable from `quant.evaluate`, which wired `sink_mask`
+and nothing else. Wired 2026-08-27 (**C24**). It needed **no new measurement** —
+`ResidualRecord` has accumulated a per-layer `channel_max` in-hook since the
+first sink run, so the mask is derived from what was already on disk rather than
+stored beside it. `python -m analysis.report --outlier-mask`.
+
+| model | channels | **100×** | 50× | 20× | 10× |
+|---|---|---|---|---|---|
+| `gpt2_small` | 768 | **1** | 1 | 2 | 11 |
+| `qwen3_0.6b_base` | 1024 | **1** | 1 | 1 | 3 |
+| `gated_1b_baseline` | 2048 | **1** | 1 | 1 | 3 |
+| `gated_1b_headwise` | 2048 | **0** | 0 | 0 | 4 |
+| `gated_1b_elementwise` | 2048 | **0** | 0 | 0 | 3 |
+
+**The arm is undefined for both gated checkpoints.** At the locked 100×
+threshold they flag nothing — R1 on the feature axis: the gate removed the
+massive activations, so there is no outlier channel to hold in fp16 and the
+difference would be a spurious zero. The same shape as `D_sink` being undefined
+for a sink-free model (LIMITATIONS §17). **The threshold was not lowered to make
+them runnable**; at 10× they flag 3–4 each and that is a diagnostic, not a
+result.
+
+**Where it runs, it works on one model of three.** 30 new cells, 8-bit, all five
+draws. `python -m analysis.report --bits 8 --exception outlier_channels`.
+
+| model | Δppl none | Δppl exempt | removed | D (seq bootstrap, nats) |
+|---|---|---|---|---|
+| `gpt2_small` | +8.0726 | +8.3050 | **−2.9%** | −0.0083 [−0.0195, +0.0032] *ZERO* |
+| `qwen3_0.6b_base` | +14.2787 | +14.2814 | **−0.0%** | +0.0038 [−0.0234, +0.0289] *ZERO* |
+| `gated_1b_baseline` | +18.4696 | +9.6738 | **+47.6%** | +0.2981 [+0.2657, +0.3348] |
+
+One channel of 2048 removes **47.6%** of the ungated baseline's per-tensor
+damage. The same intervention buys nothing on GPT-2 or Qwen3 — both intervals
+contain zero, both point estimates slightly negative. Against the token axis on
+the same three: position 0 removes 74.7%, 80.8%, 86.7%. **The token axis works
+wherever there is a sink; the feature axis works on one model in three.**
+
+**Why neither §11.3 branch was right.** It predicted: rescues element-wise only
+→ C23's axis story unfinished; rescues everything or nothing → feature axis
+uninformative, close as a null. Instead the arm **cannot be run** on
+element-wise, and rescues one of the three where it can. So the feature axis is
+neither uninformative nor general — it is model-specific, and undefined on the
+checkpoint whose failure most needed explaining. Which is itself informative:
+whatever destroys the element-wise arm under per-tensor 8-bit, a residual-stream
+outlier channel is not it, because it does not have one. Consistent with R6,
+which located that failure in a tensor this detector does not watch.
+
+**A second defect the wiring exposed, and it would have been silent.** One
+`ExceptionSpec` goes to every patched module, and `entry_mask` selected channels
+by a bounds *clip*. Modules do not share an input width — q/k/v/gate/up read the
+residual stream, `o_proj` reads concatenated head outputs, `down_proj` reads the
+MLP intermediate — and a bounds check passes a narrow mask on a wide tensor
+precisely because every index is in range. 56 of 196 modules would have been
+exempted by coincidence. `ExceptionSpec` now carries the width it was measured
+at. LIMITATIONS §23.
+
+**The lesson, and it is a different one from C20–C23.** Those were explanations
+running ahead of measurements. This is an arm named in the plan, listed in the
+Makefile grid, unit-tested in isolation, and never once executed end to end.
+Unit tests on a component are not evidence that a pipeline exists. §10.
+
 ### What R3-rev corrected in R3 (unchanged, kept for the trail)
 
 | Claim in R3 | Fate |
@@ -512,20 +584,20 @@ project root, not a subfolder layout).
 | File | Lines | State | Holds |
 |---|---|---|---|
 | `sinks/hooks.py` | 304 | done | Forward hooks reducing to scalars in-hook; the `output_attentions` null-out fix; Pébay online moments |
-| `sinks/metrics.py` | 125 | done | Sink mass, head entropy, ∞-norms, outlier channels, excess kurtosis, received attention |
+| `sinks/metrics.py` | 177 | done | Sink mass, head entropy, ∞-norms, outlier channels, excess kurtosis, received attention |
 | `sinks/detector.py` | 196 | done | Layer-relative and aggregate detectors, τ sweep, attention validation gate |
 | `sinks/measure.py` | 341 | done | Track-A CLI; `resolve_model_path`; the Day-2 gate; corpus provenance |
 | `quant/fakequant.py` | 169 | done | Quant/dequant, scale derivation, `scale_source` exclusion, static scale from amax |
-| `quant/patch.py` | 361 | done | `QuantLinear`, Conv1D support, exception specs, observation mode, patch/restore |
+| `quant/patch.py` | 389 | done | `QuantLinear`, Conv1D support, exception specs, observation mode, patch/restore |
 | `quant/calibrate.py` | 188 | done | Disjoint corpus slicing, batching, BOS policy, static range collection |
-| `quant/evaluate.py` | 619 | done | Per-token NLL, `D_sink` decomposition, `evaluate_cell`, `run_grid`, `--grid` CLI, corpus loading |
+| `quant/evaluate.py` | 688 | done | Per-token NLL, `D_sink` decomposition, `evaluate_cell`, `run_grid`, `--grid` CLI, corpus loading |
 | `quant/diagnose.py` | 245 | done | Arm decomposition, range-coverage table, projection exemption |
 | `quant/distributions.py` | 349 | done | Per-layer dispersion on **both** axes, effective bits, per-granularity underflow. Quantizes nothing (R6, C23) |
 | `quant/lambada.py` | 331 | done | `lambada_openai` greedy exact-match; paired per-example arrays and the discordant count (R8) |
 | `analysis/aggregate.py` | 218 | done | runs/ → dataframes; reconstructs `D_sink`; the comparability guard |
 | `analysis/stats.py` | 165 | done | Paired bootstrap, sequence bootstrap, variance-source reporting |
 | `analysis/figures.py` | 417 | done | Figures 1–3; zero-crossing hollow, destroyed cells hatched, floored accuracy cells named. `lambada_rows` splits Figure 3's geometry out so it can be asserted against the tables |
-| `analysis/report.py` | 232 | done | The README's tables; per-width and per-bit-width views |
+| `analysis/report.py` | 374 | done | The README's tables; per-width and per-bit-width views |
 | `analysis/distributions.py` | 370 | done | R6 tables joined to the damage they explain; `--sweep` finds the thresholds where the ranking fails, `--axis` reports both dispersion axes (C23) |
 | `analysis/corpora.py` | 433 | done | Cross-corpus join; per-claim stability verdicts computed rather than asserted, and `--bitwidth` maps every sentence of §5.5 to a number (R7, C21, C22) |
 | `analysis/lambada.py` | 265 | done | Accuracy beside the Δppl it should track; `--ranks` compares the two orderings, `--power` prints each cell's resolution (R8) |
@@ -553,6 +625,9 @@ project root, not a subfolder layout).
 | `test_corpora.py` | The headline reduction refuses a zero-crossing numerator; the ranking check reports "no threshold" when the order inverts, and does not credit an all-zero column |
 | `test_lambada.py` | The logits alignment (an off-by-one grades every model on the token AFTER the answer and looks fine); the target's leading space; all-or-nothing scoring across multi-token answers; the discordant counter tracks damage |
 | `test_lambada_report.py` | Cancellation is not agreement; the saturation floor fires; the dynamic control keeps its own key; resolution widens as the sample shrinks |
+| `test_patch.py` (added) | A channel mask applies at the width it was measured at and is skipped, not clipped, on a wider tensor; `resolve_fp16_exceptions` records that width from the mask itself |
+| `test_metrics.py` (added) | The two cross-layer channel reductions, and a case where they disagree — a quiet layer's local outlier that `union` flags and `aggregate` does not |
+| `test_evaluate.py` (added) | The outlier mask is derived from the recorded maxima, the threshold moves it, ragged rows are refused, and an outlier-free model yields an empty mask rather than a guess |
 | `test_figures.py` | Figure 3's interval ends swap when a DROP interval is laid on an ACCURACY axis; the floor and the interval are the ones `analysis.lambada` owns, not copies; a model missing an arm is dropped rather than half-drawn; two bit widths in one call are refused rather than captioned with one of them; the deferred import keeps `figures`↔`lambada` acyclic |
 
 ---
@@ -811,6 +886,17 @@ gitignored figure is a broken image in the README, and `runs/diag/` and
   "the damage is distributed across the network" — when it sat in three
   modules nobody had looked at. Name the search space whenever you report an
   absence, so the next reader can see what was never checked.
+- **A unit-tested component is not a working pipeline** (C24). `outlier_channels`
+  was implemented, unit-tested, named in the plan and listed in the Makefile
+  grid, and could not be run: nothing built the mask it needed. It had been that
+  way since the first commit. Before believing an arm exists, execute it end to
+  end once — the tests it passes are the tests someone wrote for the part that
+  worked.
+- **A bounds check is not a meaning check** (C24). Channel indices from a
+  2048-wide residual stream are all "in range" on a 6144-wide MLP intermediate,
+  so a clip accepted them and would have exempted 56 of 196 modules by
+  coincidence. When an index set is applied to a tensor it was not measured on,
+  the question is never "does it fit".
 - **τ=2 over-flags** on every model measured, and the attention validation gate
   correctly rejects it. Do not widen the τ grid downward to "find more sinks".
 - **`D_sink` is undefined for sink-free models** in the `detected_sinks` arm.
@@ -881,36 +967,35 @@ interventional half is what travels.
 Cheap: distributions quantize nothing, so it is one holdout pass per checkpoint
 per corpus.
 
-### 3. The `detected_sinks` and `outlier_channels` arms
+### 3. `detected_sinks` — the one exception arm still never run
 
-`detected_sinks` is one command:
-`--grid --exceptions detected_sinks --sinks-json runs/sinks/<model>_calib0_nobos.json`.
+**`outlier_channels` is done.** It was the live finding under this heading and
+it is now R9 / C24 (§3): wired, run on all five checkpoints, 30 cells, written
+up in README §5.9 and LIMITATIONS §23. It needed no re-measurement — the mask
+comes from the per-channel maxima the sink runs already record.
 
-**`outlier_channels` is not, and this is a live finding.** It is implemented in
-`quant/patch.py` and unit-tested, but the `quant.evaluate` CLI **never builds an
-`outlier_mask`** — it wires `sink_mask` from `--sinks-json` and nothing else, so
-the arm raises `ValueError` if selected. `sinks/measure.py` imports
-`outlier_channels` from `sinks.metrics` at line 49 and never calls it. The arm
-has no end-to-end path. Wiring it means recording the outlier mask in the sinks
-JSON (where the design clearly intended it) and reading it back in `evaluate`;
-that implies re-running `sinks.measure` for all five models, which should
-reproduce R1 exactly and must be checked to.
+`detected_sinks` is what is left, and it is one command per model:
 
-**The prediction that used to be here failed — see C23.** It read: the
-element-wise failure is row dispersion, so a channel-wise exception should not
-rescue the layer-0 tensor. The transposed statistic contradicted it before any
-intervention was run: that tensor is *more* dispersed on the feature axis
-(304×) than on the row axis (28.4×), and per-feature scaling would take its
-underflow to ~1%.
+```bash
+python -m quant.evaluate --model <m> --grid --bits-list 8     --granularities per_tensor,per_token --exceptions detected_sinks --seeds 0,1,2,3,4     --seq-len 256 --calib-tokens 2048 --eval-tokens 8192     --sinks-json runs/sinks/<m>_calib0_nobos.json
+```
 
-So the live question is now the opposite one, and it is sharper. Per-feature
-underflow is flat and near zero across the **whole roster**, damaged and
-undamaged models alike — which is exactly the shape of a statistic that
-discriminates nothing. If `outlier_channels` nonetheless rescues element-wise
-and only element-wise, something separates that model on the feature axis which
-`underflow_col` does not capture, and the axis story is unfinished. If it
-rescues everything or nothing, the feature axis is confirmed as uninformative
-here and the arm can be reported as a null and closed.
+Pass all five seeds even to fill one: draws are positional prefixes, so `--seeds
+0` builds one draw and `slices.draw(3)` then raises. Draw *i* is byte-identical
+either way, which `ppl_ref` matching to six decimals confirms.
+
+**What to expect, and what would be surprising.** It will be undefined for both
+gated arms, for the reason LIMITATIONS §17 gives — no sinks, nothing to exempt —
+so it runs on three models like R9 did. On those three it should land *between*
+`position_0` and nothing: it exempts a superset of position 0, so a result
+*worse* than `position_0` would mean the extra positions cost more range than
+they buy, which is exactly what R9 saw happen on the feature axis for GPT-2 and
+Qwen3. That is the interesting outcome and the one worth looking for.
+
+**The comparison that makes it worth running at all** is now three-way rather
+than two: token axis narrow (`position_0`), token axis wide (`detected_sinks`),
+feature axis (`outlier_channels`). R9 established the third column on one model
+of three. The second is the only cell of that table still empty.
 
 ### 4. Track B, if it happens at all
 

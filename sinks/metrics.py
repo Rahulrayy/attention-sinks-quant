@@ -96,6 +96,58 @@ def outlier_channels(hidden_states: torch.Tensor, threshold: float = 100.0) -> t
     return per_channel_max > threshold * median
 
 
+def aggregate_outlier_channels(
+    per_layer_channel_max: torch.Tensor, threshold: float = 100.0
+) -> torch.Tensor:
+    """Model-wide outlier channels from per-layer maxima. (L, C) -> bool (C,).
+
+    The channel-axis analogue of ``aggregate_inf_norm``, and reduced the same
+    way: max over layers first, then the ``outlier_channels`` rule on the
+    result. A residual-stream channel that is extreme anywhere in the network is
+    extreme in the residual stream, because the residual stream is one object
+    the blocks read and write in turn.
+
+    This exists because the fp16 exception it feeds is applied to the whole
+    model at once: ``ExceptionSpec.channel_indices`` is a single list of feature
+    indices, not one list per layer. Some reduction across layers is therefore
+    forced, and the choice must be stated rather than left to whoever calls it.
+
+    The alternative — flag per layer, then union — is NOT the same set, and it
+    is the more permissive one: a channel that is mild against its own layer's
+    median can still be flagged there while being unremarkable against the
+    network-wide median. Reducing first keeps one median for one mask, which is
+    what the single-mask exception actually implements. ``union`` below computes
+    the other set so the difference can be measured instead of argued.
+    """
+    if per_layer_channel_max.dim() != 2:
+        raise ValueError(f"expected (L, C), got {tuple(per_layer_channel_max.shape)}")
+    if per_layer_channel_max.numel() == 0:
+        raise ValueError("no per-layer channel maxima to reduce")
+
+    per_channel_max = per_layer_channel_max.detach().abs().amax(dim=0).to(torch.float32)
+    median = per_channel_max.median()
+    return per_channel_max > threshold * median
+
+
+def union_outlier_channels(
+    per_layer_channel_max: torch.Tensor, threshold: float = 100.0
+) -> torch.Tensor:
+    """Flag per layer against that layer's own median, then union. (L, C) -> (C,).
+
+    The reduction ``aggregate_outlier_channels`` does not use. Kept so the gap
+    between the two definitions is a number a caller can print, rather than a
+    judgement call buried in whichever one got written first.
+    """
+    if per_layer_channel_max.dim() != 2:
+        raise ValueError(f"expected (L, C), got {tuple(per_layer_channel_max.shape)}")
+    if per_layer_channel_max.numel() == 0:
+        raise ValueError("no per-layer channel maxima to reduce")
+
+    m = per_layer_channel_max.detach().abs().to(torch.float32)
+    medians = m.median(dim=1, keepdim=True).values
+    return (m > threshold * medians).any(dim=0)
+
+
 def excess_kurtosis(x: torch.Tensor) -> float:
     """Per-layer activation kurtosis — Bondarenko's outlier proxy.
 

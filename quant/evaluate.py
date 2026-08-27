@@ -299,6 +299,43 @@ def d_sink_from_means(none: dict, exempt: dict) -> dict[str, float]:
     }
 
 
+def outlier_mask_from_sinks(sinks: dict, *, threshold: float = 100.0):
+    """Build the `outlier_channels` mask from a runs/sinks JSON. -> bool (C,).
+
+    Derived here rather than stored there, and that is the deliberate half of
+    this function. `sinks.measure` already records the raw statistic the mask
+    needs -- `residual[l]["channel_max"]`, the per-channel max over the whole
+    calibration pass, accumulated in-hook by `ResidualRecord` -- so writing a
+    mask into the measurement JSON as well would put a derived quantity next to
+    the thing it is derived from, free to disagree with it the moment the
+    threshold moves. The threshold is an argument of the quantization arm, not a
+    property of the measurement, and it belongs on this side of the line.
+
+    The practical consequence is that this arm needs no new measurement: every
+    checkpoint's maxima have been on disk since the sink runs, so the mask is a
+    read, not a re-run of five models.
+    """
+    import torch
+
+    from sinks.metrics import aggregate_outlier_channels
+
+    records = sinks.get("residual") or []
+    rows = [r["channel_max"] for r in records if r.get("channel_max")]
+    if not rows:
+        raise ValueError(
+            "this sinks JSON records no per-layer channel_max, so the outlier "
+            "mask cannot be derived from it. Re-run sinks.measure."
+        )
+    widths = {len(r) for r in rows}
+    if len(widths) != 1:
+        raise ValueError(
+            f"per-layer channel_max rows disagree on width: {sorted(widths)}. "
+            "They index one residual stream and must all be the same length."
+        )
+    return aggregate_outlier_channels(torch.tensor(rows, dtype=torch.float32),
+                                      threshold=threshold)
+
+
 def evaluate_cell(
     model,
     *,
@@ -400,6 +437,9 @@ def main() -> None:
     parser.add_argument("--bits-list", help="grid mode: comma list, default from quant.yaml")
     parser.add_argument("--granularities", help="grid mode: comma list, default from quant.yaml")
     parser.add_argument("--exceptions", help="grid mode: comma list, default from quant.yaml")
+    parser.add_argument("--outlier-threshold", type=float, default=100.0,
+                        help="outlier_channels: flag a channel whose network-wide "
+                             "max exceeds this multiple of the median channel's")
     parser.add_argument("--seeds", help="grid mode: comma list, default from quant.yaml")
     parser.add_argument(
         "--calib-tokens", type=int,
@@ -454,11 +494,17 @@ def main() -> None:
     print(f"corpus={len(ids)} tok  holdout={len(slices.holdout)}  draws={slices.n_draws}"
           f"x{per_draw}  seq={ns.seq_len}  holdout_sha={provenance['holdout_sha']}", flush=True)
 
+    def _arm_selected(arm: str) -> bool:
+        """Is this exception arm about to be run, as a single cell or in the grid?"""
+        if ns.fp16_exception == arm:
+            return True
+        if not ns.grid:
+            return False
+        return arm in (_str_list(ns.exceptions) if ns.exceptions
+                       else qcfg["fp16_exceptions"])
+
     sink_mask = None
-    if ns.fp16_exception == "detected_sinks" or (
-        ns.grid and "detected_sinks" in (_str_list(ns.exceptions) if ns.exceptions
-                                         else qcfg["fp16_exceptions"])
-    ):
+    if _arm_selected("detected_sinks"):
         if not ns.sinks_json:
             raise SystemExit("--fp16-exception detected_sinks requires --sinks-json")
         with open(ns.sinks_json, encoding="utf-8") as fh:
@@ -483,6 +529,25 @@ def main() -> None:
         sink_mask = torch.zeros(1, ns.seq_len, dtype=torch.bool)
         sink_mask[0, [p for p in positions if p < ns.seq_len]] = True
 
+    outlier_mask = None
+    if _arm_selected("outlier_channels"):
+        if not ns.sinks_json:
+            raise SystemExit("--fp16-exception outlier_channels requires --sinks-json")
+        with open(ns.sinks_json, encoding="utf-8") as fh:
+            outlier_mask = outlier_mask_from_sinks(
+                json.load(fh), threshold=ns.outlier_threshold
+            )
+        n_flagged = int(outlier_mask.sum())
+        if not n_flagged:
+            raise SystemExit(
+                f"{ns.sinks_json}: no channel exceeds {ns.outlier_threshold}x the "
+                "median at the network-wide maximum, so this arm would be "
+                "identical to the none arm and its D_sink a spurious zero. "
+                "Lower --outlier-threshold, or report the null."
+            )
+        print(f"outlier_channels: {n_flagged}/{outlier_mask.numel()} channels "
+              f"exempt at threshold {ns.outlier_threshold}x", flush=True)
+
     bos = tokenizer.bos_token_id
 
     if ns.grid:
@@ -498,6 +563,7 @@ def main() -> None:
                         else list(qcfg["fp16_exceptions"])),
             seeds=seeds,
             sink_mask=sink_mask,
+            outlier_mask=outlier_mask,
             device=ns.device,
             out=ns.out,
             provenance=provenance,
@@ -519,6 +585,7 @@ def main() -> None:
         act_granularity=ns.act_granularity,
         exception_kind=ns.fp16_exception,
         sink_mask=sink_mask,
+        outlier_mask=outlier_mask,
         device=ns.device,
     )
 
@@ -546,6 +613,7 @@ def run_grid(
     exceptions: list[str],
     seeds: list[int],
     sink_mask=None,
+    outlier_mask=None,
     device: str = "cuda",
     out: str = "runs/quant",
     skip_existing: bool = True,
@@ -595,6 +663,7 @@ def run_grid(
                         act_granularity=gran,
                         exception_kind=exc,
                         sink_mask=sink_mask,
+                        outlier_mask=outlier_mask,
                         device=device,
                     )
                     with open(path, "w", encoding="utf-8") as fh:

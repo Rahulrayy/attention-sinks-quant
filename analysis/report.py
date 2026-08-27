@@ -75,18 +75,31 @@ def _fmt(iv) -> str:
     return s + " *ZERO*" if iv.crosses_zero else s
 
 
-def markdown(cells: dict, *, bits: int, seed: int = 0) -> str:
-    """The README table for one bit width."""
+def markdown(cells: dict, *, bits: int, seed: int = 0,
+             exception: str = "position_0") -> str:
+    """The README table for one bit width.
+
+    ``exception`` picks which fp16 arm the `none` cell is differenced against.
+    The default is the token-axis one the headline metric is defined on;
+    ``outlier_channels`` reads the same table on the feature axis, which is the
+    only way the two are comparable — same holdout, same draws, same bootstrap.
+    """
+    axis = ("D_sink" if exception in ("position_0", "detected_sinks")
+            else f"`{exception}` damage removed")
     lines = [
-        f"`D_sink` at {bits}-bit activations, nats, 95% sequence-bootstrap CI. "
+        f"{axis} at {bits}-bit activations, nats, 95% sequence-bootstrap CI. "
         "*ZERO* = interval contains zero.",
         "",
         "| model | ppl_ref | Δppl (per-tensor) | per-tensor (2023) | "
         "Δppl (per-token) | per-token (modern) | ratio |",
         "|---|---|---|---|---|---|---|",
     ]
-    table = rows(cells, bits=bits, seed=seed)
+    table = rows(cells, bits=bits, seed=seed, exception=exception)
+    undefined = [r["model"] for r in table
+                 if "per_tensor" not in r and "per_token" not in r]
     for r in table:
+        if r["model"] in undefined:
+            continue
         ratio = f"{r['ratio']:.0f}×" if r.get("ratio") else "—"
         dead_a = " **DESTROYED**" if r.get("per_tensor_destroyed") else ""
         dead_b = " **DESTROYED**" if r.get("per_token_destroyed") else ""
@@ -96,6 +109,16 @@ def markdown(cells: dict, *, bits: int, seed: int = 0) -> str:
             f"{r.get('per_token_dppl', float('nan')):+.4f}{dead_b} | "
             f"{_fmt(r.get('per_token'))} | {ratio} |"
         )
+    if undefined:
+        lines += [
+            "",
+            "No `" + exception + "` cell exists for " +
+            ", ".join(f"`{m}`" for m in undefined) +
+            ". That is not a missing run: the arm cannot be constructed for a "
+            "model the detector flags nothing on, so there is nothing to hold "
+            "in fp16 and the difference would be a spurious zero "
+            "(LIMITATIONS §17, and §23 for this axis).",
+        ]
     if any(r.get("per_tensor_destroyed") or r.get("per_token_destroyed") for r in table):
         lines += [
             "",
@@ -171,8 +194,8 @@ def threshold_sweep(cells: dict, *, seed: int = 0, thresholds=(2, 3, 5, 10, 20, 
     return "\n".join(lines)
 
 
-def variance(cells: dict, *, bits: int) -> str:
-    """Spread of D_sink across calibration draws, per model x granularity.
+def variance(cells: dict, *, bits: int, exception: str = "position_0") -> str:
+    """Spread of the arm's effect across calibration draws, per model x granularity.
 
     Exists to keep C18 visible in the output: the per-token rows should read
     exactly 0.000000, and a reader should be able to see that rather than infer
@@ -180,13 +203,14 @@ def variance(cells: dict, *, bits: int) -> str:
     """
     import statistics
 
-    lines = [f"D_sink spread across the 5 calibration draws, {bits}-bit:", ""]
+    lines = [f"`{exception}` effect, spread across the 5 calibration draws, "
+             f"{bits}-bit:", ""]
     for model in _ordered({k[0] for k in cells}):
         for gran in ("per_tensor", "per_token"):
             vals = []
             for seed in range(5):
                 none = cells.get((model, bits, gran, "none", seed))
-                exc = cells.get((model, bits, gran, "position_0", seed))
+                exc = cells.get((model, bits, gran, exception, seed))
                 if none and exc:
                     vals.append(
                         none["quantized_means"]["nll_all"] - exc["quantized_means"]["nll_all"]
@@ -199,6 +223,110 @@ def variance(cells: dict, *, bits: int) -> str:
     return "\n".join(lines)
 
 
+def arm_summary(cells: dict, *, bits: int = 8, exception: str = "outlier_channels") -> str:
+    """Total damage with and without one fp16 arm, averaged over the draws.
+
+    The interval tables above are in nats and are the statistical claim. This is
+    the same arms in perplexity, which is the unit the rest of the README uses
+    for total damage, and averaged over all five calibration draws rather than
+    read off seed 0 — for a static per-tensor arm the draw IS a variance source
+    (C18 applies only to the dynamic one), and on GPT-2 seed 0 alone points the
+    opposite way from the other four.
+    """
+    import statistics
+
+    lines = [
+        f"Total damage with and without the `{exception}` exemption, "
+        f"{bits}-bit, mean over 5 calibration draws.",
+        "",
+        "| model | granularity | Δppl none | Δppl exempt | damage removed |",
+        "|---|---|---|---|---|",
+    ]
+    any_row = False
+    for model in _ordered({k[0] for k in cells}):
+        for gran in ("per_tensor", "per_token"):
+            none = [cells[(model, bits, gran, "none", s)]["delta_ppl"]
+                    for s in range(5) if (model, bits, gran, "none", s) in cells]
+            arm = [cells[(model, bits, gran, exception, s)]["delta_ppl"]
+                   for s in range(5) if (model, bits, gran, exception, s) in cells]
+            if not none or not arm:
+                continue
+            a, b = statistics.mean(none), statistics.mean(arm)
+            pct = f"{100 * (a - b) / a:+.1f}%" if a else "—"
+            lines.append(f"| `{model}` | {gran.replace('_', '-')} | {a:+.4f} "
+                         f"| {b:+.4f} | **{pct}** (n={len(none)},{len(arm)}) |")
+            any_row = True
+    if not any_row:
+        return f"(no `{exception}` cells at {bits} bits)"
+    lines += [
+        "",
+        "*Damage removed* is positive when the exemption helped. A negative "
+        "number is not a small effect measured precisely — it is the arm making "
+        "the model slightly worse, which a whole-channel exemption can do by "
+        "spending range on a channel that was not the problem.",
+    ]
+    return "\n".join(lines)
+
+
+def outlier_mask_table(sinks_root: str = "runs/sinks",
+                       thresholds=(100.0, 50.0, 20.0, 10.0)) -> str:
+    """How many channels the feature-axis detector flags, per model. Generated.
+
+    The first column is the only one that is a result: 100x is the threshold
+    `sinks/metrics.py` locked before any data was collected. The rest are a
+    sensitivity diagnostic, and they are printed together precisely so nobody
+    can quote a looser one as though it were the definition. Choosing the
+    threshold that makes an arm runnable, after seeing which models it makes
+    runnable, is the failure this project audits others for.
+    """
+    import json
+    from pathlib import Path
+
+    import torch
+
+    from sinks.metrics import aggregate_outlier_channels
+
+    rows_ = []
+    for path in sorted(Path(sinks_root).glob("*_calib0_nobos.json")):
+        with open(path, encoding="utf-8") as fh:
+            sinks = json.load(fh)
+        chan = [r["channel_max"] for r in sinks.get("residual", []) if r.get("channel_max")]
+        if not chan:
+            continue
+        t = torch.tensor(chan, dtype=torch.float32)
+        model = path.name.replace("_calib0_nobos.json", "")
+        rows_.append((model, t.shape[1],
+                      [int(aggregate_outlier_channels(t, threshold=th).sum())
+                       for th in thresholds]))
+    if not rows_:
+        return f"(no sink runs with channel_max under {sinks_root})"
+
+    order = {m: i for i, m in enumerate(MODEL_ORDER)}
+    rows_.sort(key=lambda r: order.get(r[0], len(MODEL_ORDER)))
+
+    head = " | ".join(f"{'**' if th == 100.0 else ''}{th:g}×"
+                      f"{'**' if th == 100.0 else ''}" for th in thresholds)
+    lines = [
+        "Channels flagged by the residual-stream outlier detector "
+        "(`aggregate_outlier_channels`), per model.",
+        "",
+        f"| model | channels | {head} |",
+        "|---|---|" + "---|" * len(thresholds),
+    ]
+    for model, width, counts in rows_:
+        cells_ = " | ".join(f"**{c}**" if i == 0 else str(c)
+                            for i, c in enumerate(counts))
+        lines.append(f"| `{model}` | {width} | {cells_} |")
+    lines += [
+        "",
+        "**100× is the locked threshold** (`sinks/metrics.py`, fixed before any "
+        "data was collected). The looser columns are a sensitivity diagnostic "
+        "and are not results: a model that only becomes measurable at 10× was "
+        "not measurable.",
+    ]
+    return "\n".join(lines)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bits", type=int, action="append",
@@ -208,9 +336,18 @@ def main() -> None:
     parser.add_argument("--by-bitwidth", action="store_true",
                         help="one granularity across every width (README §5.5)")
     parser.add_argument("--granularity", default="per_token")
+    parser.add_argument("--exception", default="position_0",
+                        help="fp16 arm to difference against: position_0 "
+                             "(default), detected_sinks, outlier_channels")
+    parser.add_argument("--outlier-mask", action="store_true",
+                        help="channels the feature-axis detector flags, per model (C24)")
     parser.add_argument("--threshold-sweep", action="store_true",
                         help="sensitivity of the destroyed-cell threshold (HANDOFF §12)")
     ns = parser.parse_args()
+
+    if ns.outlier_mask:
+        print(outlier_mask_table())
+        return
 
     cells = load_cells(ns.root)
     if ns.by_bitwidth:
@@ -222,9 +359,14 @@ def main() -> None:
 
     widths = ns.bits or sorted({k[1] for k in cells}, reverse=True)
     for bits in widths:
-        print(markdown(cells, bits=bits, seed=ns.seed))
+        print(markdown(cells, bits=bits, seed=ns.seed, exception=ns.exception))
         print()
-        print(variance(cells, bits=bits))
+        # Perplexity, draw-averaged, for whichever arm is being reported. The
+        # interval table above is nats at seed 0; this is the same arm in the
+        # unit the README uses for total damage, over every draw.
+        print(arm_summary(cells, bits=bits, exception=ns.exception))
+        print()
+        print(variance(cells, bits=bits, exception=ns.exception))
         print()
 
 

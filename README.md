@@ -523,6 +523,10 @@ behind 10× is in `HANDOFF.md` §12.
   quietly patched.
 - The 4-bit grid is uninterpretable in both granularities and is reported as
   such rather than dropped or spun.
+- The **feature-axis** exception arm (`outlier_channels`) is undefined for both
+  gated checkpoints for the same reason — the gate left no outlier channel to
+  exempt — and buys nothing on two of the three models where it can be run
+  (§5.9, **C24**).
 
 ### 5.7 Corpus sensitivity: what survives a change of domain
 
@@ -713,6 +717,76 @@ non-zero, ±1–3 points here. Every per-token cell except Qwen3's and
 element-wise's has a drop smaller than its own resolution, so those are bounds,
 not measurements. LIMITATIONS §22 has the rest of what this task does not
 license.
+
+### 5.9 The other axis: the arm that could not be run where it mattered
+
+Everything above holds the sink in fp16 on the **token** axis — position 0, a
+row of the activation matrix. The plan named a second exception arm on the
+**feature** axis: hold the outlier *channels* in fp16 instead. It had never been
+run. It was implemented in `quant/patch.py` and unit-tested there, but
+`quant.evaluate` never built the mask it needs, so selecting the arm raised
+(**C24**). It is wired now, and the wiring needed no new measurement — the sink
+runs have been recording per-channel maxima in-hook since the first one, so the
+mask is derived from what was already on disk.
+
+**The first result is about the roster, not about quantization.**
+`python -m analysis.report --outlier-mask`:
+
+| model | channels | **100×** | 50× | 20× | 10× |
+|---|---|---|---|---|---|
+| `gpt2_small` | 768 | **1** | 1 | 2 | 11 |
+| `qwen3_0.6b_base` | 1024 | **1** | 1 | 1 | 3 |
+| `gated_1b_baseline` | 2048 | **1** | 1 | 1 | 3 |
+| `gated_1b_headwise` | 2048 | **0** | 0 | 0 | 4 |
+| `gated_1b_elementwise` | 2048 | **0** | 0 | 0 | 3 |
+
+At the locked 100× threshold the two gated checkpoints flag **nothing**. That is
+§5.1 restated on the feature axis: the gate removed the massive activations, so
+there is no outlier channel to exempt, and the arm **cannot be constructed** for
+them — the same way `D_sink` is undefined for a sink-free model (§5.6). The
+threshold was not lowered to make them measurable. At 10× they flag 3–4 channels
+each, and picking a threshold after seeing which models it makes runnable is the
+failure this audit exists to catch.
+
+**Where it can be run, it works on one model of three.**
+`python -m analysis.report --bits 8 --exception outlier_channels`:
+
+| model | granularity | Δppl none | Δppl exempt | damage removed |
+|---|---|---|---|---|
+| `gpt2_small` | per-tensor | +8.0726 | +8.3050 | **−2.9%** |
+| `qwen3_0.6b_base` | per-tensor | +14.2787 | +14.2814 | **−0.0%** |
+| `gated_1b_baseline` | per-tensor | +18.4696 | +9.6738 | **+47.6%** |
+
+Exempting **one channel of 2048** removes **47.6%** of the ungated baseline's
+per-tensor damage, with a sequence-bootstrap interval of +0.2981 [+0.2657,
++0.3348] nats that is nowhere near zero. On GPT-2 and Qwen3 the same
+intervention buys nothing at all — both intervals contain zero, and the point
+estimates are slightly negative, which is a whole-channel exemption spending
+range on a channel that was not the problem. Averaged over draws, because on
+GPT-2 seed 0 alone points the other way from the other four.
+
+Set against the token axis on the same three models — same command, `--exception
+position_0` — holding position 0 removes **74.7%**, **80.8%** and **86.7%** of
+per-tensor damage. **The token axis works wherever there is a sink; the feature
+axis works on one model in three.**
+
+#### What this does and does not settle
+
+The open question this arm was run to answer (`HANDOFF.md` §11.3) had two
+branches: if it rescued `1B_elementwise` and only that, C23's axis story was
+unfinished; if it rescued everything or nothing, the feature axis was
+uninformative and the arm closed as a null. The answer is neither. It **cannot
+be run** on `1B_elementwise` — the roster's most damaged model by three orders
+of magnitude has no residual outlier channel — and among the three where it can
+be run it rescues exactly one.
+
+So the feature axis is neither uninformative nor general. It is model-specific,
+and on the checkpoint whose failure most needed explaining it is undefined —
+which is itself informative: whatever destroys the element-wise arm under
+per-tensor 8-bit, a residual-stream outlier channel is **not** it. That is
+consistent with §5.4, which located the failure in a tensor the residual-stream
+detector does not watch. LIMITATIONS §23 has what the arm does not license,
+including the fact that it is one channel and not a set.
 
 ## 6. Limitations
 

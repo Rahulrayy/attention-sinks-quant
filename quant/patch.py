@@ -59,11 +59,36 @@ class ExceptionSpec:
     channel_indices -> indices along the feature axis (outlier_channels)
 
     Empty on both axes means the ``none`` arm: full damage, the reference cell.
+
+    ``channel_width`` is the feature width the channel indices were MEASURED at
+    and it is not decoration. The same spec is handed to every patched module,
+    and a decoder's modules do not share an input width: in the Qwen3 arms
+    q/k/v/gate/up read the residual stream, while o_proj reads the concatenated
+    head outputs and down_proj reads the MLP intermediate. Channel 1877 of the
+    residual stream is not channel 1877 of the MLP intermediate; they are
+    unrelated features that happen to share an index. Without this field the
+    indices are silently applied to all three widths, and 56 of the 196
+    quantized modules in a 1B arm get an exemption chosen by coincidence — an
+    arm that would report a number while measuring nothing. ``None`` keeps the
+    old width-agnostic behaviour for a mask a caller vouches for.
     """
 
     kind: str = "none"
     token_positions: list[int] = field(default_factory=list)
     channel_indices: list[int] = field(default_factory=list)
+    channel_width: int | None = None
+
+    def channels_apply_to(self, x: torch.Tensor) -> bool:
+        """Do these channel indices index the same feature axis ``x`` has?
+
+        Deliberately a hard width match rather than a bounds clip. Clipping
+        answers "are these indices in range", which is the wrong question and
+        happens to be true for the narrow-mask/wide-tensor case that is exactly
+        the one to reject.
+        """
+        if self.channel_width is None:
+            return True
+        return x.shape[-1] == self.channel_width
 
     @property
     def is_empty(self) -> bool:
@@ -85,7 +110,7 @@ class ExceptionSpec:
             idx = idx[idx < x.shape[-2]]
             if idx.numel():
                 mask[..., idx, :] = True
-        if self.channel_indices:
+        if self.channel_indices and self.channels_apply_to(x):
             idx = torch.as_tensor(self.channel_indices, device=x.device)
             idx = idx[idx < x.shape[-1]]
             if idx.numel():
@@ -102,7 +127,7 @@ class ExceptionSpec:
             idx = idx[idx < x_orig.shape[-2]]
             if idx.numel():
                 out[..., idx, :] = x_orig[..., idx, :]
-        if self.channel_indices:
+        if self.channel_indices and self.channels_apply_to(x_orig):
             idx = torch.as_tensor(self.channel_indices, device=x_orig.device)
             idx = idx[idx < x_orig.shape[-1]]
             if idx.numel():
@@ -356,6 +381,9 @@ def resolve_fp16_exceptions(
         channels = torch.nonzero(outlier_mask, as_tuple=False).flatten().tolist()
         if not channels:
             raise ValueError("outlier_mask flagged no channels")
-        return ExceptionSpec(kind, channel_indices=channels)
+        # The mask's own length is the width it was measured at, so the spec
+        # carries it and no caller has to remember to.
+        return ExceptionSpec(kind, channel_indices=channels,
+                             channel_width=int(outlier_mask.shape[-1]))
 
     raise ValueError(f"unknown fp16 exception kind: {kind!r}")

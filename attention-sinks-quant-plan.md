@@ -36,6 +36,7 @@ standard §6 imposes on metric changes, applied to the plan itself.
 | C21 | §6, §7 | **R6's cross-model ranking did not survive a second corpus.** "Annihilated-layer count orders the roster by per-tensor damage" holds on FineWeb-Edu at three thresholds and on Python source at **none**. Five models with one 258× outlier were never enough to tell a mechanism from a lucky sort. The *causal* half of R6 reproduced and strengthened | **Retracts half a finding** |
 | C22 | §6 | **R5's "single exception" was corpus-dependent, and its 115× was a rounding artefact.** Head-wise's 6-bit per-tensor cell sits at 8.7× its reference on FineWeb-Edu and **12.4×** on code, so it survives on one corpus and is destroyed on the other — the only destroyed-status flip anywhere between the two grids. The element-wise 8→6 growth figure was 111×, not 115×: two 4-decimal display values were divided. R5's *direction* claims travel; its thresholds and growth rates do not | **Qualifies a claim, fixes a number** |
 | C23 | §6, §7 | **R6's mechanism was attributed to the wrong axis.** The element-wise layer-0 tensor is extreme on *both* axes — row dispersion 28.4× and **feature dispersion 304×** against 1.6× / 6–9× on its siblings — and the feature axis is the more dispersed one on **every** model in the roster, including the least damaged. Per-feature underflow is flat and near zero everywhere, so it discriminates nothing. The localisation and its controls are unaffected | **Corrects an explanation, not a measurement** |
+| C24 | §6, §7, §9 | **The `outlier_channels` arm had no end-to-end path, and where it now has one it is undefined for two of five checkpoints.** `quant.evaluate` never built an `outlier_mask`, so selecting the arm raised; `sinks.measure` imported the detector and never called it. Wired 2026-08-27 by deriving the mask from the per-layer `channel_max` the sink runs already record — no re-measurement needed. At the locked 100× threshold it flags **1** channel on each sink-bearing model and **0** on both gated arms, which have no massive activations left to flag. A second defect the wiring exposed: one `ExceptionSpec` goes to every patched module, and a residual-stream channel index is meaningless on the 56 of 196 modules that read a different feature axis | **Kills an axis on 2 of 5 models** |
 
 Findings that are *results* rather than corrections are marked **✎ RESULT**:
 [C12](#c12) (early preview on GPT-2), [R1](#r1) (the gated trio is sink-free),
@@ -759,6 +760,69 @@ attention-sinks-quant/
 > is the same move: the *explanation* ran ahead of the *measurement*, in a
 > project whose entire subject is claims that do that. The measurements have all
 > held. What keeps failing is the sentence wrapped around them.
+
+> ### ✎ CORRECTION C24 — 2026-08-27 · the feature-axis arm, and the two models it cannot be run on
+>
+> §6 lists `outlier_channels` as one of four fp16 exception arms. It was
+> implemented in `quant/patch.py` and unit-tested there, and it had **no
+> end-to-end path**: `quant.evaluate` wired `sink_mask` from `--sinks-json` and
+> nothing else, so selecting the arm raised `ValueError` from inside
+> `resolve_fp16_exceptions`. `sinks/measure.py` imported `outlier_channels` at
+> line 49 and never called it. The plan has carried this arm since day one and
+> nothing in the repo could run it.
+>
+> **The wiring needed no new measurement.** `ResidualRecord` has been
+> accumulating a per-layer `channel_max` in-hook since the first sink run, so
+> every checkpoint's per-channel maxima were already on disk. The mask is now
+> derived from them at read time (`quant.evaluate.outlier_mask_from_sinks`)
+> rather than stored beside them: the threshold is a parameter of the
+> quantization arm, not a property of the measurement, and a stored mask would
+> be a derived number sitting next to its own input, free to disagree with it.
+>
+> **What ran, and what it says.** At the locked 100× threshold:
+>
+> | model | channels flagged | of | per-tensor damage removed (5 draws) |
+> |---|---|---|---|
+> | GPT-2 small | 1 | 768 | **−2.9%** (it got slightly worse) |
+> | Qwen3-0.6B-Base | 1 | 1024 | −0.0% |
+> | `1B_baseline` | 1 | 2048 | **47.6%** |
+> | `1B_headwise` | **0** | 2048 | *arm undefined* |
+> | `1B_elementwise` | **0** | 2048 | *arm undefined* |
+>
+> The gated arms flag nothing because the gate removed the massive activations
+> that define an outlier channel — R1 measured their residual magnitude at 4.1×
+> and 2.2× against the baseline's 370×. So the arm cannot be built for them at
+> all, exactly as `detected_sinks` cannot be built for a sink-free model (C17).
+> The threshold was **not** lowered to make them measurable; at 10× they flag
+> 3–4 channels each, and that number is recorded as a diagnostic in
+> LIMITATIONS §23, never as a result.
+>
+> **The prediction §11.3 offered was wrong in a way neither branch anticipated.**
+> It read: if the arm rescues element-wise and only element-wise, the axis story
+> C23 opened is unfinished; if it rescues everything or nothing, the feature
+> axis is uninformative and the arm closes as a null. Neither. It **cannot be
+> run** on element-wise, and among the three where it can be run it rescues
+> exactly one. The feature axis is not uninformative and not general — it is
+> model-specific, and on the model whose failure most needed explaining it is
+> undefined. Whatever destroys `1B_elementwise` under per-tensor 8-bit, a
+> residual-stream outlier channel is not it, because it does not have one.
+>
+> **The second defect, which would have been silent.** One `ExceptionSpec` is
+> handed to every patched module, and `entry_mask` selected channels by a bounds
+> *clip*. A decoder's modules do not share an input width: in the Qwen3 arms
+> q/k/v/gate/up read the residual stream, `o_proj` reads concatenated head
+> outputs, `down_proj` reads the MLP intermediate. Residual channel 1877 is not
+> MLP-intermediate channel 1877, and a bounds check passes it precisely because
+> a narrow mask is in range on a wide tensor. 56 of 196 modules would have been
+> exempted by coincidence, and the arm would have reported a number while
+> measuring something else. `ExceptionSpec` now carries the width it was
+> measured at and applies to the 140 modules that share it.
+>
+> **Where this one sits in the pattern.** C20–C23 were all explanations running
+> ahead of measurements. This one is different and, for a portfolio audit,
+> worse: an arm named in the plan, listed in the Makefile grid, and unit-tested
+> in isolation, which had never once been executed. Unit tests on a component
+> are not evidence that a pipeline exists.
 
 ---
 

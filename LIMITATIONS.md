@@ -419,3 +419,54 @@ lm-eval-harness's `acc`, kept identical so the fp16 numbers are checkable
 against published ones. A ranked-candidate or stop-word-filtered variant would
 give different absolute numbers; whether it would give different *orderings* is
 untested here.
+
+### 23. The `outlier_channels` arm is undefined for the two checkpoints it exists to test
+The feature-axis exception arm was wired end-to-end for the first time on
+2026-08-27. It ran, and the first thing it established is about the roster
+rather than about quantization.
+
+At the locked threshold — 100×, `sinks/metrics.py`, unchanged since before any
+data was collected — the residual-stream detector flags:
+
+| model | channels flagged | of |
+|---|---|---|
+| GPT-2 small | 1 | 768 |
+| Qwen3-0.6B-Base | 1 | 1024 |
+| `1B_baseline` | 1 | 2048 |
+| `1B_headwise` | **0** | 2048 |
+| `1B_elementwise` | **0** | 2048 |
+
+The gated arms have no outlier channels because the gate removed the massive
+activations that define one — R1 measured their residual magnitude at 4.1× and
+2.2× against the ungated baseline's 370×. So the arm cannot be constructed for
+either of them, for the same reason `detected_sinks` cannot be constructed for a
+sink-free model (§17): there is nothing to hold in fp16, and the difference
+would be a spurious zero rather than a null result. That is a fact about the
+checkpoints, not missing data, and the generated table says so rather than
+leaving a blank cell.
+
+**Why it constrains the conclusions.** `1B_elementwise` is the most damaged
+model in the roster by three orders of magnitude, and it is one of the two this
+arm cannot be run on. So the feature-axis intervention cannot speak to the
+failure R6 localised — not because it was tried and did nothing, but because
+the model has no residual outlier channel to exempt. Whatever destroys that
+checkpoint under per-tensor 8-bit, a residual-stream outlier channel is not it.
+
+**The threshold was not lowered to make the arm runnable.** At 10× the gated
+arms do flag 3–4 channels each. Choosing a detection threshold after seeing
+which models it makes measurable is the failure this project audits others for,
+so 100× stands and the 10× figure is recorded here as a diagnostic, never as a
+result.
+
+**It is one channel, not a set.** Where the arm is defined it exempts exactly
+one channel on all three models. Nothing here licenses a claim about "outlier
+channels" in the plural, and the arm is not a test of the more permissive
+`union_outlier_channels` reduction, which is implemented and unused.
+
+**And it reaches 140 of 196 modules, not all of them.** One `ExceptionSpec` is
+handed to every patched module, but a decoder's modules do not share an input
+width: in the Qwen3 arms q/k/v/gate/up read the residual stream while `o_proj`
+reads concatenated head outputs and `down_proj` reads the MLP intermediate. A
+residual channel index means nothing on those two, so `ExceptionSpec` now
+carries the width it was measured at and skips them. Before that guard existed
+the indices were applied by coincidence to 56 of 196 modules — see C24.

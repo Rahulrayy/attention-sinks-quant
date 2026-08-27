@@ -16,7 +16,9 @@ from sinks.metrics import (  # noqa: E402
     excess_kurtosis,
     fraction_heads_sinking,
     head_entropy,
+    aggregate_outlier_channels,
     outlier_channels,
+    union_outlier_channels,
     received_attention,
     residual_inf_norm,
     sink_mass,
@@ -120,6 +122,51 @@ def test_outlier_threshold_is_relative_not_absolute():
     x = torch.ones(B, T, C)
     x[0, 0, 5] = 500.0
     assert torch.equal(outlier_channels(x), outlier_channels(x * 1e6))
+
+
+# --- reducing the channel axis across layers ---------------------------------
+#
+# The fp16 exception takes ONE channel list for the whole model, so the per-layer
+# maxima have to be reduced somehow and the choice is not free. These pin which
+# reduction is which, and that they can disagree — the reason both exist.
+
+def test_aggregate_reduces_over_layers_then_thresholds():
+    """The channel-axis analogue of aggregate_inf_norm: max over layers first."""
+    per_layer = torch.ones(4, C)
+    per_layer[2, 5] = 500.0
+    flagged = aggregate_outlier_channels(per_layer, threshold=100.0)
+    assert flagged[5] and flagged.sum().item() == 1
+
+
+def test_aggregate_is_relative_to_the_network_wide_median():
+    per_layer = torch.ones(4, C)
+    per_layer[2, 5] = 500.0
+    assert torch.equal(aggregate_outlier_channels(per_layer),
+                       aggregate_outlier_channels(per_layer * 1e6))
+
+
+def test_the_two_reductions_are_not_the_same_set():
+    """The case that makes the choice matter, and the reason it is documented
+    rather than picked. Layer 3 is a quiet layer: channel 9 towers over ITS
+    median by 200x while sitting far below the network-wide one, which a single
+    loud layer elsewhere sets. Union flags it; aggregate does not."""
+    per_layer = torch.ones(4, C)
+    per_layer[0] = 1000.0            # a loud layer, sets the network-wide median
+    per_layer[0, 5] = 500_000.0      # and a genuine outlier in it
+    per_layer[3] = 0.001             # a quiet layer
+    per_layer[3, 9] = 0.5            # 500x ITS median, 0.0005x the loud layer's
+
+    agg = aggregate_outlier_channels(per_layer, threshold=100.0)
+    uni = union_outlier_channels(per_layer, threshold=100.0)
+    assert agg[5] and uni[5]
+    assert uni[9] and not agg[9]
+    assert uni.sum() > agg.sum()
+
+
+def test_both_reductions_reject_a_shape_that_is_not_layers_by_channels():
+    for fn in (aggregate_outlier_channels, union_outlier_channels):
+        with pytest.raises(ValueError, match=r"\(L, C\)"):
+            fn(torch.ones(B, T, C))
 
 
 # --- kurtosis ----------------------------------------------------------------

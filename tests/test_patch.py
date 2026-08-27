@@ -217,3 +217,71 @@ def test_per_tensor_benefits_more_than_per_token():
     d_sink_tensor = damage("per_tensor", "none") - damage("per_tensor", "position_0")
     d_sink_token = damage("per_token", "none") - damage("per_token", "position_0")
     assert d_sink_tensor > d_sink_token
+
+
+# --- the channel mask must not be applied to an axis it did not measure ------
+#
+# One ExceptionSpec is handed to every patched module, and a decoder's modules
+# do not share an input width. A residual-stream channel index means nothing on
+# the MLP intermediate, and the old bounds-clip quietly accepted it: the indices
+# are all in range there, so 56 of a 1B arm's 196 modules got an exemption
+# chosen by coincidence. That is an arm that reports a number while measuring
+# nothing, which is the failure mode this repo exists to catch.
+
+def test_channel_indices_apply_at_the_width_they_were_measured_at():
+    spec = ExceptionSpec("outlier_channels", channel_indices=[3], channel_width=8)
+    mask = spec.entry_mask(torch.zeros(2, 4, 8))
+    assert mask is not None and mask[..., 3].all()
+    assert mask.sum() == 2 * 4          # one channel, every token
+
+
+def test_a_wider_tensor_is_left_alone_rather_than_clipped_into():
+    """The rejected case. Every index is in range on a 64-wide input, which is
+    exactly why a bounds check passes it and a width check does not."""
+    spec = ExceptionSpec("outlier_channels", channel_indices=[3], channel_width=8)
+    wide = torch.zeros(2, 4, 64)
+    assert spec.entry_mask(wide).sum() == 0
+
+    x_orig = torch.arange(2 * 4 * 64, dtype=torch.float32).reshape(2, 4, 64)
+    x_quant = torch.zeros_like(x_orig)
+    assert torch.equal(spec.apply(x_quant, x_orig), x_quant)   # nothing restored
+
+
+def test_a_spec_with_no_declared_width_keeps_the_old_behaviour():
+    """`None` means "the caller vouches for these indices". Kept so a hand-built
+    spec in a test or a notebook is not silently disarmed."""
+    spec = ExceptionSpec("outlier_channels", channel_indices=[3])
+    assert spec.entry_mask(torch.zeros(2, 4, 64)).sum() == 2 * 4
+
+
+def test_resolve_records_the_width_from_the_mask_it_was_given():
+    """Nobody has to remember to pass the width: the mask's length is it."""
+    outlier = torch.zeros(1024, dtype=torch.bool)
+    outlier[[7, 900]] = True
+    spec = resolve_fp16_exceptions("outlier_channels", outlier_mask=outlier)
+    assert spec.channel_indices == [7, 900]
+    assert spec.channel_width == 1024
+
+
+def test_the_exemption_still_buys_a_tighter_scale_at_the_right_width():
+    """The mechanism test, on the feature axis. A channel carrying a huge value
+    drags a per-tensor scale; exempting it must reduce the error on the OTHER
+    channels, or the arm is cosmetic."""
+    torch.manual_seed(0)
+    x = torch.randn(1, 16, 64)
+    x[..., 5] = 500.0                                   # the outlier channel
+    outlier = torch.zeros(64, dtype=torch.bool)
+    outlier[5] = True
+    spec = resolve_fp16_exceptions("outlier_channels", outlier_mask=outlier)
+
+    others = [c for c in range(64) if c != 5]
+    mask = spec.entry_mask(x)
+    plain = qdq(x, 8, "per_tensor")
+    kept = spec.apply(qdq(x, 8, "per_tensor", scale_source=x.masked_fill(mask, 0.0)), x)
+
+    err_plain = (plain - x)[..., others].abs().mean().item()
+    err_kept = (kept - x)[..., others].abs().mean().item()
+    assert err_kept < err_plain / 10, (
+        f"exempting the outlier channel should shrink error on the other 63 by "
+        f"an order of magnitude; got {err_plain:.4f} -> {err_kept:.4f}"
+    )

@@ -463,6 +463,12 @@ one channel on all three models. Nothing here licenses a claim about "outlier
 channels" in the plural, and the arm is not a test of the more permissive
 `union_outlier_channels` reduction, which is implemented and unused.
 
+**The mask comes from draw 0's sink run.** Checked on a second draw
+(`--calib-seed 1`, all five checkpoints, 2026-08-27): the flagged counts are
+unchanged at 1/1/1/0/0, so the arm is defined on the same three models and
+undefined on the same two. Two draws, not five — see §24 for what that does and
+does not settle.
+
 **And it reaches 140 of 196 modules, not all of them.** One `ExceptionSpec` is
 handed to every patched module, but a decoder's modules do not share an input
 width: in the Qwen3 arms q/k/v/gate/up read the residual stream while `o_proj`
@@ -502,8 +508,26 @@ That work reports multi-level structure on other models at longer contexts. A
 256-token window on five checkpoints cannot speak to it, and this entry should
 not be cited as though it could.
 
-**And it is one calibration draw's detector output.** The exception list comes
-from `runs/sinks/<model>_calib0_nobos.json` — draw 0, no BOS — and is then held
-fixed across all five draws of the grid, so the arm inherits whatever that one
-detector pass saw. Re-running `sinks.measure` on another draw could in principle
-select a different τ; that has not been tested.
+**The detector output comes from one draw, and that has now been checked
+rather than assumed.** The exception list is built from
+`runs/sinks/<model>_calib0_nobos.json` — draw 0, no BOS — and held fixed across
+all five draws of the grid, so the arm inherits whatever that one detector pass
+saw. `sinks.measure --calib-seed 1` was run on all five checkpoints on
+2026-08-27 and **every decision reproduces**:
+
+| model | draw 0 | draw 1 |
+|---|---|---|
+| GPT-2 small | τ=50, `[0]` | τ=50, `[0]` |
+| Qwen3-0.6B-Base | τ=100, `[0]` | τ=100, `[0]` |
+| `1B_baseline` | τ=100, `[0]` | τ=100, `[0]` |
+| `1B_headwise` | undefined | undefined |
+| `1B_elementwise` | undefined | undefined |
+
+`sink_free` is unchanged on all five, and §23's outlier-channel counts are
+unchanged too (1/1/1/0/0). The continuous metrics do move — mean sink mass
+shifts 3–9% between draws, e.g. 0.3834 → 0.3657 on GPT-2 — but nothing crosses
+a decision boundary.
+
+**Two draws is not five.** This says the selection is not delicately balanced on
+draw 0; it does not establish draw-independence. Draws 2–4 have not been
+measured, and `make measure` is the target that would do it.

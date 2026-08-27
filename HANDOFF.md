@@ -25,7 +25,7 @@ it.
 | Corpora | **3** committed — FineWeb-Edu (current), Python source (second-corpus arm), in-repo markdown (archived) |
 | Diagnostic runs | **23** — 14 web + 9 code, arm decomposition plus localisation tests |
 | Distribution runs | **10** — 5 per corpus, re-measured with the feature-axis statistic (C23) |
-| Sink measurement runs | **5** — one per checkpoint, draw 0, no-BOS |
+| Sink measurement runs | **10** — one per checkpoint on draws 0 and 1, no-BOS; draw 1 reproduces every detector decision |
 | LAMBADA runs | **15** — 3 arms × 5 checkpoints, 1000 examples, 8-bit |
 | Figures | **3** — `fig1_d_sink`, `fig2_bitwidth`, `fig3_lambada`, all from `analysis.figures` |
 | Corrections to the original plan | **25** |
@@ -71,6 +71,11 @@ moving, and this session was the prose.
   test can reach, and run — it is **undefined** for both gated arms and
   **bit-identical to `position_0`** on the other three. The grid has three real
   exception arms, not four. README §5.9, LIMITATIONS §24.
+- **The draw-dependence of both exception arms, checked** (§11.3). The one knob
+  LIMITATIONS §24 had left untested: both arms read draw 0's detector pass.
+  `sinks.measure --calib-seed 1` on all five checkpoints reproduces every
+  decision — τ, positions, outlier counts, `sink_free`. The continuous metrics
+  move a few percent and nothing crosses a boundary. Two draws, not five.
 - **The repo map's line counts are now read off the files.** Seven of the
   twenty-two rows were stale, `analysis/report.py` by 40 lines. A table of
   remembered numbers, in a project whose thesis is "generate, do not
@@ -1032,11 +1037,17 @@ being unknowns — one produced a finding (the feature axis is model-specific an
 undefined on the model that most needed it), the other collapsed into an arm
 that already existed.
 
-**If anyone reopens this**, the only untested knob left is the one LIMITATIONS
-§24 names: the exception list comes from draw 0's detector pass and is held
-fixed across all five draws. Another draw could in principle select a different
-τ. Cheap to check — `sinks.measure --calib-seed 1` and compare the selected τ —
-and it has not been checked.
+**The draw-dependence knob is checked.** Both arms take their exception list
+from draw 0's detector pass, held fixed across all five draws of the grid, so a
+different draw could in principle have selected a different τ or a different
+channel. `sinks.measure --calib-seed 1` on all five checkpoints:
+**every decision reproduces** — same τ, same `[0]`, same two models undefined,
+same 1/1/1/0/0 outlier counts, same `sink_free` verdicts. Mean sink mass moves
+3–9% between draws without crossing anything. LIMITATIONS §23 and §24.
+
+**What is left of it is draws 2–4.** Two draws says the selection is not
+delicately balanced on draw 0; it does not establish draw-independence.
+`make measure` runs the full 5×2 sweep if anyone wants it closed properly.
 
 ### 4. Track B, if it happens at all
 

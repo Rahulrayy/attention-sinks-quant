@@ -826,6 +826,12 @@ defined on `position_0`. But this is a null about *three checkpoints, one
 detector and a 256-token window*, and specifically **not** a refutation of the
 multi-level sink literature that motivated the detector (§2). LIMITATIONS §24.
 
+Both arms read their exception list from a single detector pass, so that pass
+was re-run on a second calibration draw: every decision above reproduces — same
+τ, same positions, same two models undefined, same outlier-channel counts. The
+continuous metrics move a few percent without crossing anything. Two draws is
+not five, and LIMITATIONS §24 says so.
+
 ## 6. Limitations
 
 See [LIMITATIONS.md](LIMITATIONS.md) — 22 entries, the first six written before
